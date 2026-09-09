@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { motion } from "framer-motion";
 import type { CoupleSettings } from "@/lib/types";
 import { saveCoupleSettings } from "@/app/settings/actions";
 
@@ -26,49 +27,50 @@ export default function SettingsForm({ settings }: { settings: CoupleSettings })
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <p className="mb-4 text-sm text-slate-500">
-        These defaults pre-fill new months. Editing a month directly won&apos;t change past months.
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <p className="mb-4 text-sm text-muted">
+        Deze standaardwaarden vullen nieuwe maanden automatisch in. Een lopende maand aanpassen verandert niets aan
+        eerdere maanden.
       </p>
       <div className="grid grid-cols-2 gap-4">
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-600">Joint account (fixed)</span>
+          <span className="text-muted">Gezamenlijke rekening (vast)</span>
           <input
             type="number"
             step="0.01"
             value={fields.joint_fixed}
             onChange={(e) => update("joint_fixed", Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-2"
+            className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-600">Groceries</span>
+          <span className="text-muted">Boodschappen</span>
           <input
             type="number"
             step="0.01"
             value={fields.joint_groceries}
             onChange={(e) => update("joint_groceries", Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-2"
+            className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-600">User 1 personal fixed default</span>
+          <span className="text-muted">Standaard vaste kosten Jairo</span>
           <input
             type="number"
             step="0.01"
             value={fields.user1_fixed_default}
             onChange={(e) => update("user1_fixed_default", Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-2"
+            className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-600">User 2 personal fixed default</span>
+          <span className="text-muted">Standaard vaste kosten Naroa</span>
           <input
             type="number"
             step="0.01"
             value={fields.user2_fixed_default}
             onChange={(e) => update("user2_fixed_default", Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-2"
+            className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
           />
         </label>
       </div>
@@ -76,11 +78,19 @@ export default function SettingsForm({ settings }: { settings: CoupleSettings })
         <button
           onClick={handleSave}
           disabled={isPending}
-          className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          className="press rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:brightness-95 disabled:opacity-50"
         >
-          {isPending ? "Saving…" : "Save defaults"}
+          {isPending ? "Bezig met opslaan…" : "Standaardwaarden opslaan"}
         </button>
-        {savedAt && <span className="text-sm text-emerald-600">Saved</span>}
+        {savedAt && (
+          <motion.span
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-sm text-surplus-ink"
+          >
+            Opgeslagen
+          </motion.span>
+        )}
       </div>
     </section>
   );

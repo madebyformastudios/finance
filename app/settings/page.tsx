@@ -14,8 +14,8 @@ export default async function SettingsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <NavBar email={user?.email} />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-        <h1 className="mb-5 text-xl font-semibold text-slate-900">Settings</h1>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <h1 className="mb-5 font-display text-xl font-semibold text-ink">Instellingen</h1>
         <SettingsForm settings={settings} />
       </main>
     </div>

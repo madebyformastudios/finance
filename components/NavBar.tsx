@@ -2,27 +2,27 @@ import Link from "next/link";
 
 export default function NavBar({ email }: { email?: string | null }) {
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-        <nav className="flex items-center gap-5 text-sm font-medium text-slate-600">
-          <Link href="/dashboard" className="hover:text-slate-900">
-            Dashboard
+    <header className="border-b border-border bg-card">
+      <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+        <nav className="flex items-center gap-5 font-display text-sm font-medium text-muted">
+          <Link href="/dashboard" className="hover:text-ink">
+            Overzicht
           </Link>
-          <Link href="/history" className="hover:text-slate-900">
-            History
+          <Link href="/history" className="hover:text-ink">
+            Geschiedenis
           </Link>
-          <Link href="/settings" className="hover:text-slate-900">
-            Settings
+          <Link href="/settings" className="hover:text-ink">
+            Instellingen
           </Link>
         </nav>
         <div className="flex items-center gap-3">
-          {email && <span className="text-sm text-slate-500">{email}</span>}
+          {email && <span className="text-sm text-muted">{email}</span>}
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              className="press rounded-lg border border-border px-3 py-1.5 text-sm text-muted hover:bg-canvas"
             >
-              Sign out
+              Uitloggen
             </button>
           </form>
         </div>

@@ -5,34 +5,88 @@ import { motion } from "framer-motion";
 import { calculate } from "@/lib/calc";
 import type { Expense, MonthlyRecord } from "@/lib/types";
 import { addExpense, deleteExpense, saveMonthlyRecord, toggleLock } from "@/app/dashboard/actions";
+import Avatar from "@/components/Avatar";
+import Donut from "@/components/Donut";
+import CountUp from "@/components/CountUp";
 
+const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
 function currency(n: number) {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(n);
+  return eur.format(n);
 }
+
+const ASSIGNEE_LABEL: Record<string, string> = {
+  user1: "Jairo",
+  user2: "Naroa",
+  joint: "Gezamenlijk",
+};
+
+const ASSIGNEE_DOT: Record<string, string> = {
+  user1: "#1f3d33",
+  user2: "#d19a3d",
+  joint: "#6b6252",
+};
 
 function NumberField({
   label,
   value,
   onChange,
   disabled,
+  avatar,
 }: {
   label: string;
   value: number;
   onChange: (n: number) => void;
   disabled?: boolean;
+  avatar?: string;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-slate-600">{label}</span>
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="flex items-center gap-2 text-muted">
+        {avatar && <Avatar name={avatar} size={20} />}
+        {label}
+      </span>
       <input
         type="number"
         step="0.01"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded-lg border border-slate-300 px-3 py-2 text-slate-900 disabled:bg-slate-100 disabled:text-slate-400"
+        className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink outline-none transition focus:border-dominant disabled:bg-canvas disabled:text-muted"
       />
     </label>
+  );
+}
+
+function BudgetBar({
+  label,
+  amount,
+  total,
+  color,
+  avatar,
+}: {
+  label: string;
+  amount: number;
+  total: number;
+  color: string;
+  avatar?: string;
+}) {
+  const pct = total > 0 ? Math.min(100, (amount / total) * 100) : 0;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="flex items-center gap-2 text-ink">
+          {avatar && <Avatar name={avatar} size={18} />}
+          {label}
+        </span>
+        <span className="font-medium text-ink">{currency(amount)}</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-canvas">
+        <div
+          className="h-full rounded-full transition-all duration-700 ease-out"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -107,104 +161,203 @@ export default function MonthForm({
     });
   }
 
+  const isDeficit = result.deficit > 0;
+  const heroValue = isDeficit ? result.deficit : result.user2Remaining;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">{monthLabel}</h1>
-        <button
-          onClick={handleToggleLock}
-          disabled={isPending}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            locked
-              ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-dominant px-6 py-8 text-dominant-ink shadow-sm sm:px-8">
+        <svg
+          className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 opacity-20"
+          viewBox="0 0 200 200"
+          fill="none"
+        >
+          <path
+            d="M45.3,-58.5C58.6,-49.6,69.2,-35.5,73.9,-19.6C78.6,-3.7,77.3,14,69.9,28.4C62.5,42.8,49,53.9,34.3,61.4C19.6,68.9,3.6,72.8,-12.9,71.6C-29.4,70.4,-46.4,64.1,-58.3,52.4C-70.2,40.7,-77,23.6,-77.8,6.1C-78.6,-11.4,-73.4,-29.3,-62.4,-42.6C-51.4,-55.9,-34.6,-64.6,-17.9,-68.6C-1.2,-72.6,15.4,-71.9,31.9,-67.6C32,-67.6,45.3,-58.5,45.3,-58.5Z"
+            fill="currentColor"
+            transform="translate(100 100)"
+          />
+        </svg>
+        <div className="relative flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide text-dominant-ink/70">{monthLabel}</p>
+            <p className="mt-1 text-sm text-dominant-ink/70">
+              {isDeficit ? "Tekort deze maand" : "Overschot deze maand"}
+            </p>
+          </div>
+          <button
+            onClick={handleToggleLock}
+            disabled={isPending}
+            className="press rounded-full border border-dominant-ink/25 bg-dominant-ink/10 px-3 py-1.5 text-xs font-medium text-dominant-ink hover:bg-dominant-ink/20"
+          >
+            {locked ? "Ontgrendel maand" : "Vergrendel maand"}
+          </button>
+        </div>
+        <p
+          className={`relative mt-4 font-display text-5xl font-semibold tabular-nums sm:text-6xl ${
+            isDeficit ? "text-shortfall" : "text-dominant-ink"
           }`}
         >
-          {locked ? "Unlock month" : "Lock month"}
-        </button>
+          <CountUp value={heroValue} format={currency} />
+        </p>
+        <div className="relative mt-6 flex flex-wrap gap-x-8 gap-y-2 text-sm text-dominant-ink/80">
+          <span className="flex items-center gap-2">
+            <Avatar name="Jairo" size={20} />
+            Saldo Jairo: <span className="font-medium text-dominant-ink">{currency(result.user1Balance)}</span>
+          </span>
+          <span>
+            Totale lasten: <span className="font-medium text-dominant-ink">{currency(result.totalExpenses)}</span>
+          </span>
+        </div>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Income</h2>
+      {/* Allocation */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Verdeling</h2>
+        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-around">
+          <Donut
+            segments={[
+              { label: "Spaarpot", value: result.savings, color: "#6f8f74" },
+              { label: "Jairo", value: result.user1Payout, color: "#1f3d33" },
+              { label: "Naroa", value: result.user2Payout, color: "#d19a3d" },
+            ]}
+          />
+          <dl className="flex flex-col gap-3 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#6f8f74" }} />
+              <dt className="w-24 text-muted">Spaarpot (50%)</dt>
+              <dd className="font-medium text-ink">{currency(result.savings)}</dd>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#1f3d33" }} />
+              <dt className="w-24 text-muted">Jairo (25%)</dt>
+              <dd className="font-medium text-ink">{currency(result.user1Payout)}</dd>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#d19a3d" }} />
+              <dt className="w-24 text-muted">Naroa (25%)</dt>
+              <dd className="font-medium text-ink">{currency(result.user2Payout)}</dd>
+            </div>
+          </dl>
+        </div>
+        {result.shortfall > 0 && (
+          <p className="mt-4 rounded-lg bg-shortfall-soft px-3 py-2 text-sm text-shortfall-ink">
+            Naroa vangt een tekort op van {currency(result.shortfall)} voordat de rest verdeeld wordt.
+          </p>
+        )}
+        {isDeficit && (
+          <p className="mt-4 rounded-lg bg-shortfall-soft px-3 py-2 text-sm text-shortfall-ink">
+            Het inkomen van Naroa is niet genoeg om het tekort te dekken. Er blijft {currency(result.deficit)} tekort
+            over — er is deze maand niets om te verdelen.
+          </p>
+        )}
+      </section>
+
+      {/* Income */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Inkomen</h2>
         <div className="grid grid-cols-2 gap-4">
-          <NumberField label="User 1 income" value={fields.user1_income} disabled={locked} onChange={(v) => update("user1_income", v)} />
-          <NumberField label="User 2 income" value={fields.user2_income} disabled={locked} onChange={(v) => update("user2_income", v)} />
+          <NumberField
+            label="Inkomen Jairo"
+            avatar="Jairo"
+            value={fields.user1_income}
+            disabled={locked}
+            onChange={(v) => update("user1_income", v)}
+          />
+          <NumberField
+            label="Inkomen Naroa"
+            avatar="Naroa"
+            value={fields.user2_income}
+            disabled={locked}
+            onChange={(v) => update("user2_income", v)}
+          />
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Fixed & shared costs</h2>
+      {/* Fixed costs */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Vaste lasten</h2>
+        <div className="mb-5 flex flex-col gap-4">
+          <BudgetBar label="Gezamenlijke rekening" amount={fields.joint_fixed} total={result.totalExpenses} color="#1f3d33" />
+          <BudgetBar label="Boodschappen" amount={fields.joint_groceries} total={result.totalExpenses} color="#d19a3d" />
+          <BudgetBar label="Vaste kosten" avatar="Jairo" amount={fields.user1_fixed} total={result.totalExpenses} color="#6f8f74" />
+          <BudgetBar label="Vaste kosten" avatar="Naroa" amount={fields.user2_fixed} total={result.totalExpenses} color="#bf6a4d" />
+          <BudgetBar label="Creditcard" amount={fields.credit_card_bill} total={result.totalExpenses} color="#6b6252" />
+        </div>
         <div className="grid grid-cols-2 gap-4">
-          <NumberField label="Joint account (fixed)" value={fields.joint_fixed} disabled={locked} onChange={(v) => update("joint_fixed", v)} />
-          <NumberField label="Groceries" value={fields.joint_groceries} disabled={locked} onChange={(v) => update("joint_groceries", v)} />
-          <NumberField label="User 1 personal fixed" value={fields.user1_fixed} disabled={locked} onChange={(v) => update("user1_fixed", v)} />
-          <NumberField label="User 2 personal fixed" value={fields.user2_fixed} disabled={locked} onChange={(v) => update("user2_fixed", v)} />
-          <NumberField label="Credit card bill" value={fields.credit_card_bill} disabled={locked} onChange={(v) => update("credit_card_bill", v)} />
+          <NumberField label="Gezamenlijke rekening (vast)" value={fields.joint_fixed} disabled={locked} onChange={(v) => update("joint_fixed", v)} />
+          <NumberField label="Boodschappen" value={fields.joint_groceries} disabled={locked} onChange={(v) => update("joint_groceries", v)} />
+          <NumberField label="Vaste kosten Jairo" value={fields.user1_fixed} disabled={locked} onChange={(v) => update("user1_fixed", v)} />
+          <NumberField label="Vaste kosten Naroa" value={fields.user2_fixed} disabled={locked} onChange={(v) => update("user2_fixed", v)} />
+          <NumberField label="Creditcard" value={fields.credit_card_bill} disabled={locked} onChange={(v) => update("credit_card_bill", v)} />
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Extra expenses ({currency(extraTotal)})
+      {/* Extra expenses */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-muted">
+          Extra uitgaven ({currency(extraTotal)})
         </h2>
         <ul className="mb-3 flex flex-col gap-2">
           {expenses.map((e) => (
-            <li key={e.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
-              <span>
-                {e.description} <span className="text-slate-400">· {e.assignee}</span>
+            <li key={e.id} className="flex items-center justify-between rounded-xl bg-canvas px-3 py-2.5 text-sm">
+              <span className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ASSIGNEE_DOT[e.assignee] }} />
+                {e.description} <span className="text-muted">· {ASSIGNEE_LABEL[e.assignee]}</span>
               </span>
               <div className="flex items-center gap-3">
-                <span className="font-medium">{currency(Number(e.amount))}</span>
+                <span className="font-medium tabular-nums text-ink">{currency(Number(e.amount))}</span>
                 {!locked && (
-                  <button onClick={() => handleDeleteExpense(e.id)} className="text-slate-400 hover:text-red-500">
-                    Remove
+                  <button onClick={() => handleDeleteExpense(e.id)} className="press text-muted hover:text-shortfall">
+                    Verwijderen
                   </button>
                 )}
               </div>
             </li>
           ))}
-          {expenses.length === 0 && <li className="text-sm text-slate-400">No extra expenses this month.</li>}
+          {expenses.length === 0 && <li className="text-sm text-muted">Geen extra uitgaven deze maand.</li>}
         </ul>
         {!locked && (
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-600">Description</span>
+              <span className="text-muted">Omschrijving</span>
               <input
                 value={newExpense.description}
                 onChange={(e) => setNewExpense((n) => ({ ...n, description: e.target.value }))}
-                className="rounded-lg border border-slate-300 px-3 py-2"
+                className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-600">Amount</span>
+              <span className="text-muted">Bedrag</span>
               <input
                 type="number"
                 step="0.01"
                 value={newExpense.amount}
                 onChange={(e) => setNewExpense((n) => ({ ...n, amount: Number(e.target.value) }))}
-                className="w-28 rounded-lg border border-slate-300 px-3 py-2"
+                className="w-28 rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-600">Assignee</span>
+              <span className="text-muted">Wie</span>
               <select
                 value={newExpense.assignee}
                 onChange={(e) =>
                   setNewExpense((n) => ({ ...n, assignee: e.target.value as typeof n.assignee }))
                 }
-                className="rounded-lg border border-slate-300 px-3 py-2"
+                className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
               >
-                <option value="joint">Joint</option>
-                <option value="user1">User 1</option>
-                <option value="user2">User 2</option>
+                <option value="joint">Gezamenlijk</option>
+                <option value="user1">Jairo</option>
+                <option value="user2">Naroa</option>
               </select>
             </label>
             <button
               onClick={handleAddExpense}
               disabled={isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              className="press rounded-xl bg-dominant px-4 py-2 text-sm font-medium text-dominant-ink hover:bg-dominant-soft"
             >
-              Add
+              Toevoegen
             </button>
           </div>
         )}
@@ -215,63 +368,21 @@ export default function MonthForm({
           <button
             onClick={handleSave}
             disabled={isPending}
-            className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="press rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:brightness-95 disabled:opacity-50"
           >
-            {isPending ? "Saving…" : "Save month"}
+            {isPending ? "Bezig met opslaan…" : "Maand opslaan"}
           </button>
-          {savedAt && <span className="text-sm text-emerald-600">Saved</span>}
+          {savedAt && (
+            <motion.span
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-sm text-surplus-ink"
+            >
+              Opgeslagen
+            </motion.span>
+          )}
         </div>
       )}
-
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="rounded-2xl border border-slate-200 bg-white p-5"
-      >
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Breakdown</h2>
-        <dl className="grid grid-cols-2 gap-y-3 text-sm">
-          <dt className="text-slate-500">Total expenses</dt>
-          <dd className="text-right font-medium">{currency(result.totalExpenses)}</dd>
-
-          <dt className="text-slate-500">User 1 balance (income − expenses)</dt>
-          <dd className={`text-right font-medium ${result.user1Balance < 0 ? "text-red-600" : ""}`}>
-            {currency(result.user1Balance)}
-          </dd>
-
-          {result.shortfall > 0 && (
-            <>
-              <dt className="text-slate-500">Shortfall covered by User 2</dt>
-              <dd className="text-right font-medium text-red-600">{currency(result.shortfall)}</dd>
-            </>
-          )}
-
-          <dt className="text-slate-500">User 2 remaining to distribute</dt>
-          <dd className="text-right font-medium">{currency(result.user2Remaining)}</dd>
-
-          {result.deficit > 0 && (
-            <>
-              <dt className="text-red-600">Couple deficit this month</dt>
-              <dd className="text-right font-semibold text-red-600">{currency(result.deficit)}</dd>
-            </>
-          )}
-        </dl>
-
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          <div className="rounded-xl bg-emerald-50 p-4 text-center">
-            <p className="text-xs font-medium uppercase text-emerald-700">Savings</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-900">{currency(result.savings)}</p>
-          </div>
-          <div className="rounded-xl bg-sky-50 p-4 text-center">
-            <p className="text-xs font-medium uppercase text-sky-700">User 1 payout</p>
-            <p className="mt-1 text-lg font-semibold text-sky-900">{currency(result.user1Payout)}</p>
-          </div>
-          <div className="rounded-xl bg-violet-50 p-4 text-center">
-            <p className="text-xs font-medium uppercase text-violet-700">User 2 payout</p>
-            <p className="mt-1 text-lg font-semibold text-violet-900">{currency(result.user2Payout)}</p>
-          </div>
-        </div>
-      </motion.section>
     </div>
   );
 }

@@ -5,8 +5,9 @@ import { calculate } from "@/lib/calc";
 import { MONTH_NAMES } from "@/lib/types";
 import NavBar from "@/components/NavBar";
 
+const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
 function currency(n: number) {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(n);
+  return eur.format(n);
 }
 
 export default async function HistoryPage() {
@@ -40,38 +41,38 @@ export default async function HistoryPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <NavBar email={user?.email} />
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
-        <h1 className="mb-5 text-xl font-semibold text-slate-900">History</h1>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <h1 className="mb-5 font-display text-xl font-semibold text-ink">Geschiedenis</h1>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500">
+            <thead className="bg-canvas text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Month</th>
-                <th className="px-4 py-3 font-medium">Total income</th>
-                <th className="px-4 py-3 font-medium">Total expenses</th>
-                <th className="px-4 py-3 font-medium">Savings</th>
+                <th className="px-4 py-3 font-medium">Maand</th>
+                <th className="px-4 py-3 font-medium">Totaal inkomen</th>
+                <th className="px-4 py-3 font-medium">Totale lasten</th>
+                <th className="px-4 py-3 font-medium">Spaarpot</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {rows.map(({ record, result }) => (
                 <tr key={record.id}>
-                  <td className="px-4 py-3 font-medium text-slate-900">
+                  <td className="px-4 py-3 font-medium text-ink">
                     {MONTH_NAMES[record.month - 1]} {record.year}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 tabular-nums">
                     {currency(Number(record.user1_income) + Number(record.user2_income))}
                   </td>
-                  <td className="px-4 py-3">{currency(result.totalExpenses)}</td>
-                  <td className="px-4 py-3">{currency(result.savings)}</td>
+                  <td className="px-4 py-3 tabular-nums">{currency(result.totalExpenses)}</td>
+                  <td className="px-4 py-3 tabular-nums">{currency(result.savings)}</td>
                   <td className="px-4 py-3">
                     {record.locked_status ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                        Locked
+                      <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent-ink">
+                        Vergrendeld
                       </span>
                     ) : (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      <span className="rounded-full bg-canvas px-2 py-0.5 text-xs font-medium text-muted">
                         Open
                       </span>
                     )}
@@ -79,17 +80,17 @@ export default async function HistoryPage() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/dashboard?month=${record.month}&year=${record.year}`}
-                      className="text-sky-600 hover:underline"
+                      className="press text-dominant hover:underline"
                     >
-                      View
+                      Bekijken
                     </Link>
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                    No months recorded yet.
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted">
+                    Nog geen maanden geregistreerd.
                   </td>
                 </tr>
               )}

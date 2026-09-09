@@ -33,13 +33,13 @@ export default async function DashboardPage({
   return (
     <div className="flex min-h-screen flex-col">
       <NavBar email={user?.email} />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-        <div className="mb-4 flex items-center justify-between text-sm text-slate-500">
-          <Link href={`/dashboard?month=${clampMonth(prev.month)}&year=${prev.year}`} className="hover:text-slate-900">
-            ← Previous month
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <div className="mb-4 flex items-center justify-between text-sm text-muted">
+          <Link href={`/dashboard?month=${clampMonth(prev.month)}&year=${prev.year}`} className="hover:text-ink">
+            ← Vorige maand
           </Link>
-          <Link href={`/dashboard?month=${clampMonth(next.month)}&year=${next.year}`} className="hover:text-slate-900">
-            Next month →
+          <Link href={`/dashboard?month=${clampMonth(next.month)}&year=${next.year}`} className="hover:text-ink">
+            Volgende maand →
           </Link>
         </div>
         <MonthForm record={record} expenses={expenses} monthLabel={`${MONTH_NAMES[month - 1]} ${year}`} />

@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #f5f2ea;
+  --ink: #16231e;
+  --card: #fffdf8;
+  --border: #e3ddcc;
+  --muted: #6b6252;
+
+  --dominant: #1f3d33;
+  --dominant-soft: #2c5245;
+  --dominant-ink: #eef1ec;
+
+  --accent: #d19a3d;
+  --accent-ink: #4a3410;
+
+  --surplus: #6f8f74;
+  --surplus-soft: #e4ebe1;
+  --surplus-ink: #33452f;
+
+  --shortfall: #bf6a4d;
+  --shortfall-soft: #f3e0d6;
+  --shortfall-ink: #6b3420;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-ink: var(--ink);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+
+  --color-dominant: var(--dominant);
+  --color-dominant-soft: var(--dominant-soft);
+  --color-dominant-ink: var(--dominant-ink);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+
+  --color-surplus: var(--surplus);
+  --color-surplus-soft: var(--surplus-soft);
+  --color-surplus-ink: var(--surplus-ink);
+
+  --color-shortfall: var(--shortfall);
+  --color-shortfall-soft: var(--shortfall-soft);
+  --color-shortfall-ink: var(--shortfall-ink);
+
+  --font-display: var(--font-space-grotesk);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.font-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+}
+
+.press {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.press:active {
+  transform: translateY(1px) scale(0.99);
 }

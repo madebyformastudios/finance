@@ -38,16 +38,16 @@ export interface CoupleSettings {
 }
 
 export const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
+  "Januari",
+  "Februari",
+  "Maart",
   "April",
-  "May",
-  "June",
-  "July",
-  "August",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Augustus",
   "September",
-  "October",
+  "Oktober",
   "November",
   "December",
 ];
