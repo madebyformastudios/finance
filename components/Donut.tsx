@@ -28,7 +28,8 @@ export default function Donut({
   const circumference = 2 * Math.PI * radius;
   const total = segments.reduce((sum, seg) => sum + seg.value, 0) || 1;
 
-  let cumulative = 0;
+  const fractions = segments.map((seg) => seg.value / total);
+  const cumulativeFractions = fractions.map((_, i) => fractions.slice(0, i).reduce((sum, f) => sum + f, 0));
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
@@ -41,10 +42,8 @@ export default function Donut({
         strokeWidth={strokeWidth}
       />
       {segments.map((seg, i) => {
-        const fraction = seg.value / total;
-        const length = fraction * circumference;
-        const dashOffset = -cumulative * circumference;
-        cumulative += fraction;
+        const length = fractions[i] * circumference;
+        const dashOffset = -cumulativeFractions[i] * circumference;
 
         return (
           <circle

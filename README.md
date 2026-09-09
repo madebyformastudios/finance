@@ -4,7 +4,7 @@ A shared monthly finance tracker for two users, built per `Finance_Tracker_PRD.p
 
 ## Stack
 
-- Next.js 15 (App Router) + TypeScript
+- Next.js 16 (App Router, Turbopack) + TypeScript
 - Tailwind CSS + Framer Motion
 - Supabase (Postgres + Auth with Google OAuth)
 
