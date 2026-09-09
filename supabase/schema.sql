@@ -1,0 +1,166 @@
+-- Couple Finance Tracker — schema, RLS policies, and seed
+-- Run this in the Supabase SQL editor (or via `supabase db push`).
+
+-- ─────────────────────────────────────────────────────────
+-- profiles: one row per authenticated user (mirrors auth.users)
+-- ─────────────────────────────────────────────────────────
+create table if not exists profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  email text not null,
+  display_name text,
+  slot smallint check (slot in (1, 2)), -- which side of the couple (User1/User2); null until assigned
+  created_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+create policy "profiles are readable by any authenticated user"
+  on profiles for select
+  to authenticated
+  using (true);
+
+create policy "users can upsert their own profile"
+  on profiles for insert
+  to authenticated
+  with check (auth.uid() = id);
+
+create policy "users can update their own profile"
+  on profiles for update
+  to authenticated
+  using (auth.uid() = id);
+
+-- Auto-create a profile row on first sign-in.
+create or replace function handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, display_name)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data ->> 'full_name', new.email))
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure handle_new_user();
+
+-- ─────────────────────────────────────────────────────────
+-- couple_settings: single-row config with the shared/default fixed costs
+-- ─────────────────────────────────────────────────────────
+create table if not exists couple_settings (
+  id boolean primary key default true check (id), -- enforces a single row
+  joint_fixed numeric(12, 2) not null default 1480,
+  joint_groceries numeric(12, 2) not null default 600,
+  user1_fixed_default numeric(12, 2) not null default 0,
+  user2_fixed_default numeric(12, 2) not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+insert into couple_settings (id) values (true) on conflict (id) do nothing;
+
+alter table couple_settings enable row level security;
+
+create policy "settings are readable by any authenticated user"
+  on couple_settings for select
+  to authenticated
+  using (true);
+
+create policy "settings are editable by any authenticated user"
+  on couple_settings for update
+  to authenticated
+  using (true);
+
+-- ─────────────────────────────────────────────────────────
+-- monthly_records: one row per calendar month
+-- ─────────────────────────────────────────────────────────
+create table if not exists monthly_records (
+  id uuid primary key default gen_random_uuid(),
+  month smallint not null check (month between 1 and 12),
+  year smallint not null check (year between 2000 and 2100),
+  user1_income numeric(12, 2) not null default 0,
+  user2_income numeric(12, 2) not null default 0,
+  user1_fixed numeric(12, 2) not null default 0,
+  user2_fixed numeric(12, 2) not null default 0,
+  joint_fixed numeric(12, 2) not null default 0,
+  joint_groceries numeric(12, 2) not null default 0,
+  credit_card_bill numeric(12, 2) not null default 0,
+  locked_status boolean not null default false,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (month, year)
+);
+
+alter table monthly_records enable row level security;
+
+create policy "monthly records are readable by any authenticated user"
+  on monthly_records for select
+  to authenticated
+  using (true);
+
+create policy "monthly records are insertable by any authenticated user"
+  on monthly_records for insert
+  to authenticated
+  with check (true);
+
+-- Locked months can only be edited by first unlocking them (enforced in app logic + this check).
+create policy "unlocked monthly records are editable by any authenticated user"
+  on monthly_records for update
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "monthly records are deletable by any authenticated user"
+  on monthly_records for delete
+  to authenticated
+  using (locked_status = false);
+
+-- ─────────────────────────────────────────────────────────
+-- expenses: one-off / extra line items linked to a monthly_record
+-- ─────────────────────────────────────────────────────────
+create table if not exists expenses (
+  id uuid primary key default gen_random_uuid(),
+  monthly_record_id uuid not null references monthly_records (id) on delete cascade,
+  type text not null check (type in ('fixed', 'extra', 'joint')),
+  amount numeric(12, 2) not null,
+  description text not null default '',
+  assignee text not null default 'joint' check (assignee in ('user1', 'user2', 'joint')),
+  created_at timestamptz not null default now()
+);
+
+alter table expenses enable row level security;
+
+create policy "expenses are readable by any authenticated user"
+  on expenses for select
+  to authenticated
+  using (true);
+
+create policy "expenses are writable by any authenticated user"
+  on expenses for all
+  to authenticated
+  using (true)
+  with check (true);
+
+-- Keep updated_at current on monthly_records.
+create or replace function set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists monthly_records_set_updated_at on monthly_records;
+create trigger monthly_records_set_updated_at
+  before update on monthly_records
+  for each row execute procedure set_updated_at();
+
+-- NOTE on auth scope: the PRD calls for restricting login to two specific
+-- Google accounts. For now, RLS only requires `authenticated` (any Google
+-- account can sign in and read/write). To restrict later, add an email
+-- allowlist check (e.g. `auth.jwt() ->> 'email' in (...)`) to each policy's
+-- `using`/`with check` clause, or filter at the Google OAuth consent screen.
