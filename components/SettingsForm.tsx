@@ -28,8 +28,9 @@ export default function SettingsForm({ settings }: { settings: CoupleSettings })
   return (
     <section className="rounded-2xl border border-border bg-card p-5">
       <p className="mb-4 text-sm text-muted">
-        Deze standaardwaarden vullen nieuwe maanden automatisch in. Persoonlijke vaste lasten (Auto, Verzekering,
-        ...) worden per maand ingesteld op het dashboard en nemen automatisch de vorige maand over.
+        Opslaan werkt direct door in alle nog niet vergrendelde maanden (ook al bestaande) en vult nieuwe maanden
+        automatisch in. Persoonlijke vaste lasten (Auto, Verzekering, ...) worden per maand ingesteld op het
+        dashboard en nemen automatisch de vorige maand over.
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <NumberField
