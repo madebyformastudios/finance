@@ -309,57 +309,6 @@ export default function MonthForm({
         </div>
       </div>
 
-      {/* Allocation */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Verdeling</h2>
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-around">
-          <Donut
-            segments={[
-              { label: "Spaarpot", value: result.savings, color: "#6f8f74" },
-              { label: "Jairo", value: result.user1Payout, color: "#1f3d33" },
-              { label: "Naroa", value: result.user2Payout, color: "#d19a3d" },
-            ]}
-          />
-          <dl className="flex flex-col gap-3 text-sm">
-            <div className="flex items-center gap-3">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#6f8f74" }} />
-              <dt className="w-24 text-muted">Spaarpot (50%)</dt>
-              <dd className="font-medium text-ink">{currency(result.savings)}</dd>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#1f3d33" }} />
-              <dt className="w-24 text-muted">Jairo (25%)</dt>
-              <dd className="font-medium text-ink">{currency(result.user1Payout)}</dd>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#d19a3d" }} />
-              <dt className="w-24 text-muted">Naroa (25%)</dt>
-              <dd className="font-medium text-ink">{currency(result.user2Payout)}</dd>
-            </div>
-          </dl>
-        </div>
-        {result.shortfall > 0 && (
-          <p className="mt-4 rounded-lg bg-shortfall-soft px-3 py-2 text-sm text-shortfall-ink">
-            Naroa vangt een tekort op van {currency(result.shortfall)} voordat de rest verdeeld wordt.
-          </p>
-        )}
-        {isDeficit && (
-          <p className="mt-4 rounded-lg bg-shortfall-soft px-3 py-2 text-sm text-shortfall-ink">
-            Het inkomen van Naroa is niet genoeg om het tekort te dekken. Er blijft {currency(result.deficit)} tekort
-            over — er is deze maand niets om te verdelen.
-          </p>
-        )}
-      </section>
-
-      <SavingsGoals
-        monthlyRecordId={record.id}
-        monthLabel={monthLabel}
-        savingsPot={result.savings}
-        pots={savingsPots}
-        monthTransactions={savingsTransactions}
-        locked={locked}
-      />
-
       {/* Income */}
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Inkomen</h2>
@@ -492,6 +441,57 @@ export default function MonthForm({
           </div>
         )}
       </section>
+
+      {/* Allocation */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Verdeling</h2>
+        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-around">
+          <Donut
+            segments={[
+              { label: "Spaarpot", value: result.savings, color: "#6f8f74" },
+              { label: "Jairo", value: result.user1Payout, color: "#1f3d33" },
+              { label: "Naroa", value: result.user2Payout, color: "#d19a3d" },
+            ]}
+          />
+          <dl className="flex flex-col gap-3 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#6f8f74" }} />
+              <dt className="w-24 text-muted">Spaarpot (50%)</dt>
+              <dd className="font-medium text-ink">{currency(result.savings)}</dd>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#1f3d33" }} />
+              <dt className="w-24 text-muted">Jairo (25%)</dt>
+              <dd className="font-medium text-ink">{currency(result.user1Payout)}</dd>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#d19a3d" }} />
+              <dt className="w-24 text-muted">Naroa (25%)</dt>
+              <dd className="font-medium text-ink">{currency(result.user2Payout)}</dd>
+            </div>
+          </dl>
+        </div>
+        {result.shortfall > 0 && (
+          <p className="mt-4 rounded-lg bg-shortfall-soft px-3 py-2 text-sm text-shortfall-ink">
+            Naroa vangt een tekort op van {currency(result.shortfall)} voordat de rest verdeeld wordt.
+          </p>
+        )}
+        {isDeficit && (
+          <p className="mt-4 rounded-lg bg-shortfall-soft px-3 py-2 text-sm text-shortfall-ink">
+            Het inkomen van Naroa is niet genoeg om het tekort te dekken. Er blijft {currency(result.deficit)} tekort
+            over — er is deze maand niets om te verdelen.
+          </p>
+        )}
+      </section>
+
+      <SavingsGoals
+        monthlyRecordId={record.id}
+        monthLabel={monthLabel}
+        savingsPot={result.savings}
+        pots={savingsPots}
+        monthTransactions={savingsTransactions}
+        locked={locked}
+      />
 
       {!locked && (
         <div className="flex items-center gap-3">
