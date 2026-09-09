@@ -105,8 +105,14 @@ function PersonalFixedList({
             <div className="flex items-center gap-3">
               <span className="tabular-nums text-ink">{currency(Number(e.amount))}</span>
               {!locked && (
-                <button onClick={() => onDelete(e.id)} className="press text-muted hover:text-shortfall">
-                  Verwijderen
+                <button
+                  onClick={() => onDelete(e.id)}
+                  aria-label="Verwijderen"
+                  className="press flex h-6 w-6 items-center justify-center text-muted hover:text-shortfall"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-.867 12.142A2 2 0 0 1 15.138 21H8.862a2 2 0 0 1-1.995-1.858L6 7m4 4.5v5m4-5v5" />
+                  </svg>
                 </button>
               )}
             </div>
