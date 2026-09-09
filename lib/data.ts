@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { CoupleSettings, Expense, MonthlyRecord } from "@/lib/types";
+import type { CoupleSettings, Expense, MonthlyRecord, SavingsAllocation } from "@/lib/types";
 
 export async function getCoupleSettings(): Promise<CoupleSettings> {
   const supabase = await createClient();
@@ -146,6 +146,18 @@ export async function getExpensesForRecords(recordIds: string[]): Promise<Expens
     .from("expenses")
     .select("*")
     .in("monthly_record_id", recordIds);
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getSavingsAllocationsForRecord(recordId: string): Promise<SavingsAllocation[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("savings_allocations")
+    .select("*")
+    .eq("monthly_record_id", recordId)
+    .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
   return data;

@@ -164,6 +164,32 @@ create policy "expenses are writable by any authenticated user"
   using (true)
   with check (true);
 
+-- ─────────────────────────────────────────────────────────
+-- savings_allocations: how a month's 50% savings pot (Spaarpot) is
+-- distributed across named goals (Spaardoelen). Unallocated = savings pot -
+-- sum(amount) for the month.
+-- ─────────────────────────────────────────────────────────
+create table if not exists savings_allocations (
+  id uuid primary key default gen_random_uuid(),
+  monthly_record_id uuid not null references monthly_records (id) on delete cascade,
+  goal_name text not null,
+  amount numeric(12, 2) not null check (amount > 0),
+  created_at timestamptz not null default now()
+);
+
+alter table savings_allocations enable row level security;
+
+create policy "savings allocations are readable by any authenticated user"
+  on savings_allocations for select
+  to authenticated
+  using (true);
+
+create policy "savings allocations are writable by any authenticated user"
+  on savings_allocations for all
+  to authenticated
+  using (true)
+  with check (true);
+
 -- Keep updated_at current on monthly_records.
 create or replace function set_updated_at()
 returns trigger

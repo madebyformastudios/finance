@@ -36,6 +36,10 @@ See `lib/calc.ts` for the calculation engine (mirrors PRD §3.3):
 
 Each user's recurring personal costs are itemized rows in `expenses` (`type = 'personal_fixed'`, `assignee = 'user1' | 'user2'`), editable from the dashboard's "Vaste lasten" section — add with "+ Voeg vaste last toe", remove per item. When a new month is created, `lib/data.ts#clonePersonalFixedExpenses` automatically copies the previous month's `personal_fixed` items (description + amount) into the new one; edit or delete them from there, nothing is shared/linked back to the source month.
 
+## Savings goals (Spaardoelen)
+
+The month's 50% savings pot can be split into named goals, stored in `savings_allocations` (`monthly_record_id`, `goal_name`, `amount`). The dashboard's "Spaardoelen" card (`components/SavingsGoals.tsx`) shows "Nog te verdelen" = savings pot − sum(allocations), colored sage/gray/terracotta for positive/zero/negative. Adding or editing a goal is blocked client-side (with an inline message) if the amount would exceed what's left to allocate; editing an existing goal correctly frees up its own current amount first before checking the new one against the limit. Goals aren't carried forward month to month — each month starts empty.
+
 ## Design
 
 The UI follows `DESIGN.md`: Dutch-only copy throughout, a warm off-white/deep-green palette (no default slate/purple-blue gradients), Space Grotesk for headings paired with Geist for tabular financial data, a bento-box layout with a dark hero card for the month's surplus/shortfall, an animated 50/25/25 allocation donut (`components/Donut.tsx`), budget-share progress bars, Jairo/Naroa avatars (`components/Avatar.tsx`), and count-up numbers (`components/CountUp.tsx`).

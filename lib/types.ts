@@ -11,6 +11,14 @@ export interface Expense {
   created_at: string;
 }
 
+export interface SavingsAllocation {
+  id: string;
+  monthly_record_id: string;
+  goal_name: string;
+  amount: number;
+  created_at: string;
+}
+
 export interface MonthlyRecord {
   id: string;
   month: number;

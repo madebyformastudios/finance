@@ -3,12 +3,13 @@
 import { useMemo, useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import { calculate } from "@/lib/calc";
-import type { Assignee, Expense, MonthlyRecord } from "@/lib/types";
+import type { Assignee, Expense, MonthlyRecord, SavingsAllocation } from "@/lib/types";
 import { addExpense, deleteExpense, saveMonthlyRecord, toggleLock } from "@/app/dashboard/actions";
 import Avatar from "@/components/Avatar";
 import Donut from "@/components/Donut";
 import CountUp from "@/components/CountUp";
 import NumberField from "@/components/NumberField";
+import SavingsGoals from "@/components/SavingsGoals";
 
 const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
 function currency(n: number) {
@@ -150,10 +151,12 @@ function PersonalFixedList({
 export default function MonthForm({
   record,
   expenses,
+  savingsAllocations,
   monthLabel,
 }: {
   record: MonthlyRecord;
   expenses: Expense[];
+  savingsAllocations: SavingsAllocation[];
   monthLabel: string;
 }) {
   const [fields, setFields] = useState({
@@ -345,6 +348,13 @@ export default function MonthForm({
           </p>
         )}
       </section>
+
+      <SavingsGoals
+        monthlyRecordId={record.id}
+        savingsPot={result.savings}
+        allocations={savingsAllocations}
+        locked={locked}
+      />
 
       {/* Income */}
       <section className="rounded-2xl border border-border bg-card p-5">

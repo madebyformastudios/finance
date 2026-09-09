@@ -67,3 +67,28 @@ export async function deleteExpense(id: string) {
   revalidatePath("/dashboard");
   revalidatePath("/history");
 }
+
+export async function addSavingsAllocation(input: {
+  monthly_record_id: string;
+  goal_name: string;
+  amount: number;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("savings_allocations").insert(input);
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard");
+}
+
+export async function updateSavingsAllocation(id: string, amount: number) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("savings_allocations").update({ amount }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard");
+}
+
+export async function deleteSavingsAllocation(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("savings_allocations").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard");
+}
