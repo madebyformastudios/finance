@@ -3,8 +3,8 @@ import Link from "next/link";
 export default function NavBar({ email }: { email?: string | null }) {
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-        <nav className="flex items-center gap-5 font-display text-sm font-medium text-muted">
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-y-2 px-4 py-3">
+        <nav className="flex items-center gap-3 font-display text-sm font-medium text-muted sm:gap-5">
           <Link href="/dashboard" className="hover:text-ink">
             Overzicht
           </Link>
@@ -15,8 +15,8 @@ export default function NavBar({ email }: { email?: string | null }) {
             Instellingen
           </Link>
         </nav>
-        <div className="flex items-center gap-3">
-          {email && <span className="text-sm text-muted">{email}</span>}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {email && <span className="hidden text-sm text-muted sm:inline">{email}</span>}
           <form action="/auth/signout" method="post">
             <button
               type="submit"

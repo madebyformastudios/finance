@@ -7,8 +7,6 @@ export interface RecordFieldsInput {
   id: string;
   user1_income: number;
   user2_income: number;
-  user1_fixed: number;
-  user2_fixed: number;
   joint_fixed: number;
   joint_groceries: number;
   credit_card_bill: number;
@@ -46,11 +44,12 @@ export async function addExpense(input: {
   description: string;
   amount: number;
   assignee: "user1" | "user2" | "joint";
+  type?: "extra" | "personal_fixed";
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("expenses").insert({
     monthly_record_id: input.monthly_record_id,
-    type: "extra",
+    type: input.type ?? "extra",
     description: input.description,
     amount: input.amount,
     assignee: input.assignee,

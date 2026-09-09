@@ -42,7 +42,7 @@ export default async function DashboardPage({
             Volgende maand →
           </Link>
         </div>
-        <MonthForm record={record} expenses={expenses} monthLabel={`${MONTH_NAMES[month - 1]} ${year}`} />
+        <MonthForm key={record.id} record={record} expenses={expenses} monthLabel={`${MONTH_NAMES[month - 1]} ${year}`} />
       </main>
     </div>
   );

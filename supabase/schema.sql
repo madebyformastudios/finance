@@ -48,6 +48,18 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure handle_new_user();
 
+-- handle_new_user only makes sense as an auth.users insert trigger (it
+-- references NEW) — revoke direct RPC access so it can't be called via
+-- PostgREST by anon/authenticated roles.
+revoke execute on function handle_new_user() from public, anon, authenticated;
+
+-- Backfill profiles for any auth.users created before this trigger existed
+-- (e.g. anyone who signed in before schema.sql was first run).
+insert into public.profiles (id, email, display_name)
+select id, email, coalesce(raw_user_meta_data ->> 'full_name', email)
+from auth.users
+on conflict (id) do nothing;
+
 -- ─────────────────────────────────────────────────────────
 -- couple_settings: single-row config with the shared/default fixed costs
 -- ─────────────────────────────────────────────────────────
@@ -55,8 +67,6 @@ create table if not exists couple_settings (
   id boolean primary key default true check (id), -- enforces a single row
   joint_fixed numeric(12, 2) not null default 1480,
   joint_groceries numeric(12, 2) not null default 600,
-  user1_fixed_default numeric(12, 2) not null default 0,
-  user2_fixed_default numeric(12, 2) not null default 0,
   updated_at timestamptz not null default now()
 );
 
@@ -76,6 +86,8 @@ create policy "settings are editable by any authenticated user"
 
 -- ─────────────────────────────────────────────────────────
 -- monthly_records: one row per calendar month
+-- Personal fixed costs (Auto, Verzekering, ...) are itemized in `expenses`
+-- (type = 'personal_fixed'), not stored as columns here.
 -- ─────────────────────────────────────────────────────────
 create table if not exists monthly_records (
   id uuid primary key default gen_random_uuid(),
@@ -83,12 +95,15 @@ create table if not exists monthly_records (
   year smallint not null check (year between 2000 and 2100),
   user1_income numeric(12, 2) not null default 0,
   user2_income numeric(12, 2) not null default 0,
-  user1_fixed numeric(12, 2) not null default 0,
-  user2_fixed numeric(12, 2) not null default 0,
   joint_fixed numeric(12, 2) not null default 0,
   joint_groceries numeric(12, 2) not null default 0,
   credit_card_bill numeric(12, 2) not null default 0,
   locked_status boolean not null default false,
+  -- Whether personal_fixed carry-forward has been resolved for this month
+  -- (cloned from the nearest prior month, or found nothing to clone). Set
+  -- once, lazily, on first visit — never re-cloned afterward, so a
+  -- deliberate deletion sticks.
+  personal_fixed_cloned boolean not null default false,
   created_by uuid references profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -120,12 +135,16 @@ create policy "monthly records are deletable by any authenticated user"
   using (locked_status = false);
 
 -- ─────────────────────────────────────────────────────────
--- expenses: one-off / extra line items linked to a monthly_record
+-- expenses: line items linked to a monthly_record.
+-- type = 'extra'          one-off expense for the month
+-- type = 'personal_fixed' recurring personal fixed cost (Auto, Verzekering,
+--                          Mobiel, ...), assigned via `assignee`
+-- assignee 'user1' = Jairo, 'user2' = Naroa, 'joint' = shared
 -- ─────────────────────────────────────────────────────────
 create table if not exists expenses (
   id uuid primary key default gen_random_uuid(),
   monthly_record_id uuid not null references monthly_records (id) on delete cascade,
-  type text not null check (type in ('fixed', 'extra', 'joint')),
+  type text not null check (type in ('fixed', 'extra', 'joint', 'personal_fixed')),
   amount numeric(12, 2) not null,
   description text not null default '',
   assignee text not null default 'joint' check (assignee in ('user1', 'user2', 'joint')),
@@ -147,7 +166,10 @@ create policy "expenses are writable by any authenticated user"
 
 -- Keep updated_at current on monthly_records.
 create or replace function set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at = now();
   return new;

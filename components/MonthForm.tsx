@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import { calculate } from "@/lib/calc";
-import type { Expense, MonthlyRecord } from "@/lib/types";
+import type { Assignee, Expense, MonthlyRecord } from "@/lib/types";
 import { addExpense, deleteExpense, saveMonthlyRecord, toggleLock } from "@/app/dashboard/actions";
 import Avatar from "@/components/Avatar";
 import Donut from "@/components/Donut";
@@ -30,12 +30,14 @@ function NumberField({
   label,
   value,
   onChange,
+  onBlur,
   disabled,
   avatar,
 }: {
   label: string;
   value: number;
   onChange: (n: number) => void;
+  onBlur?: () => void;
   disabled?: boolean;
   avatar?: string;
 }) {
@@ -51,6 +53,7 @@ function NumberField({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
+        onBlur={onBlur}
         className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink outline-none transition focus:border-dominant disabled:bg-canvas disabled:text-muted"
       />
     </label>
@@ -90,6 +93,92 @@ function BudgetBar({
   );
 }
 
+function PersonalFixedList({
+  name,
+  assignee,
+  expenses,
+  total,
+  locked,
+  onAdd,
+  onDelete,
+  isPending,
+}: {
+  name: string;
+  assignee: Assignee;
+  expenses: Expense[];
+  total: number;
+  locked: boolean;
+  onAdd: (assignee: Assignee, description: string, amount: number) => void;
+  onDelete: (id: string) => void;
+  isPending: boolean;
+}) {
+  const [draft, setDraft] = useState({ description: "", amount: 0 });
+
+  function handleAdd() {
+    if (!draft.description || draft.amount === 0) return;
+    onAdd(assignee, draft.description, draft.amount);
+    setDraft({ description: "", amount: 0 });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-canvas p-3.5">
+      <div className="flex items-center justify-between text-sm font-medium text-ink">
+        <span className="flex items-center gap-2">
+          <Avatar name={name} size={18} />
+          Vaste kosten {name}
+        </span>
+        <span className="tabular-nums">{currency(total)}</span>
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {expenses.map((e) => (
+          <li key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-card px-3 py-2 text-sm">
+            <span className="break-words">{e.description}</span>
+            <div className="flex items-center gap-3">
+              <span className="tabular-nums text-ink">{currency(Number(e.amount))}</span>
+              {!locked && (
+                <button onClick={() => onDelete(e.id)} className="press text-muted hover:text-shortfall">
+                  Verwijderen
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+        {expenses.length === 0 && <li className="text-sm text-muted">Nog geen vaste lasten toegevoegd.</li>}
+      </ul>
+      {!locked && (
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap sm:items-end">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            <span className="text-muted">Omschrijving</span>
+            <input
+              value={draft.description}
+              placeholder="bijv. Autoverzekering"
+              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              className="rounded-lg border border-border bg-card px-3 py-1.5 outline-none focus:border-dominant"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Bedrag</span>
+            <input
+              type="number"
+              step="0.01"
+              value={draft.amount}
+              onChange={(e) => setDraft((d) => ({ ...d, amount: Number(e.target.value) }))}
+              className="w-full rounded-lg border border-border bg-card px-3 py-1.5 outline-none focus:border-dominant sm:w-24"
+            />
+          </label>
+          <button
+            onClick={handleAdd}
+            disabled={isPending}
+            className="press rounded-lg bg-dominant px-3 py-1.5 text-sm font-medium text-dominant-ink hover:bg-dominant-soft"
+          >
+            + Voeg vaste last toe
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MonthForm({
   record,
   expenses,
@@ -102,8 +191,6 @@ export default function MonthForm({
   const [fields, setFields] = useState({
     user1_income: record.user1_income,
     user2_income: record.user2_income,
-    user1_fixed: record.user1_fixed,
-    user2_fixed: record.user2_fixed,
     joint_fixed: record.joint_fixed,
     joint_groceries: record.joint_groceries,
     credit_card_bill: record.credit_card_bill,
@@ -113,21 +200,40 @@ export default function MonthForm({
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   const locked = record.locked_status;
-  const extraTotal = useMemo(() => expenses.reduce((sum, e) => sum + Number(e.amount), 0), [expenses]);
+
+  const extraExpenses = useMemo(() => expenses.filter((e) => e.type === "extra"), [expenses]);
+  const personalFixedUser1 = useMemo(
+    () => expenses.filter((e) => e.type === "personal_fixed" && e.assignee === "user1"),
+    [expenses],
+  );
+  const personalFixedUser2 = useMemo(
+    () => expenses.filter((e) => e.type === "personal_fixed" && e.assignee === "user2"),
+    [expenses],
+  );
+
+  const extraTotal = useMemo(() => extraExpenses.reduce((sum, e) => sum + Number(e.amount), 0), [extraExpenses]);
+  const user1FixedTotal = useMemo(
+    () => personalFixedUser1.reduce((sum, e) => sum + Number(e.amount), 0),
+    [personalFixedUser1],
+  );
+  const user2FixedTotal = useMemo(
+    () => personalFixedUser2.reduce((sum, e) => sum + Number(e.amount), 0),
+    [personalFixedUser2],
+  );
 
   const result = useMemo(
     () =>
       calculate({
         user1Income: fields.user1_income,
         user2Income: fields.user2_income,
-        user1Fixed: fields.user1_fixed,
-        user2Fixed: fields.user2_fixed,
+        user1Fixed: user1FixedTotal,
+        user2Fixed: user2FixedTotal,
         jointFixed: fields.joint_fixed,
         jointGroceries: fields.joint_groceries,
         extraExpenses: extraTotal,
         creditCardBill: fields.credit_card_bill,
       }),
-    [fields, extraTotal],
+    [fields, extraTotal, user1FixedTotal, user2FixedTotal],
   );
 
   function update<K extends keyof typeof fields>(key: K, value: number) {
@@ -146,6 +252,18 @@ export default function MonthForm({
     startTransition(async () => {
       await addExpense({ monthly_record_id: record.id, ...newExpense });
       setNewExpense({ description: "", amount: 0, assignee: "joint" });
+    });
+  }
+
+  function handleAddPersonalFixed(assignee: Assignee, description: string, amount: number) {
+    startTransition(async () => {
+      await addExpense({
+        monthly_record_id: record.id,
+        description,
+        amount,
+        assignee,
+        type: "personal_fixed",
+      });
     });
   }
 
@@ -179,7 +297,7 @@ export default function MonthForm({
             transform="translate(100 100)"
           />
         </svg>
-        <div className="relative flex items-center justify-between">
+        <div className="relative flex flex-wrap items-center justify-between gap-y-2">
           <div>
             <p className="text-sm font-medium uppercase tracking-wide text-dominant-ink/70">{monthLabel}</p>
             <p className="mt-1 text-sm text-dominant-ink/70">
@@ -195,7 +313,7 @@ export default function MonthForm({
           </button>
         </div>
         <p
-          className={`relative mt-4 font-display text-5xl font-semibold tabular-nums sm:text-6xl ${
+          className={`relative mt-4 break-words font-display text-4xl font-semibold tabular-nums sm:text-5xl lg:text-6xl ${
             isDeficit ? "text-shortfall" : "text-dominant-ink"
           }`}
         >
@@ -257,13 +375,14 @@ export default function MonthForm({
       {/* Income */}
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Inkomen</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <NumberField
             label="Inkomen Jairo"
             avatar="Jairo"
             value={fields.user1_income}
             disabled={locked}
             onChange={(v) => update("user1_income", v)}
+            onBlur={handleSave}
           />
           <NumberField
             label="Inkomen Naroa"
@@ -271,6 +390,7 @@ export default function MonthForm({
             value={fields.user2_income}
             disabled={locked}
             onChange={(v) => update("user2_income", v)}
+            onBlur={handleSave}
           />
         </div>
       </section>
@@ -281,16 +401,36 @@ export default function MonthForm({
         <div className="mb-5 flex flex-col gap-4">
           <BudgetBar label="Gezamenlijke rekening" amount={fields.joint_fixed} total={result.totalExpenses} color="#1f3d33" />
           <BudgetBar label="Boodschappen" amount={fields.joint_groceries} total={result.totalExpenses} color="#d19a3d" />
-          <BudgetBar label="Vaste kosten" avatar="Jairo" amount={fields.user1_fixed} total={result.totalExpenses} color="#6f8f74" />
-          <BudgetBar label="Vaste kosten" avatar="Naroa" amount={fields.user2_fixed} total={result.totalExpenses} color="#bf6a4d" />
+          <BudgetBar label="Vaste kosten" avatar="Jairo" amount={user1FixedTotal} total={result.totalExpenses} color="#6f8f74" />
+          <BudgetBar label="Vaste kosten" avatar="Naroa" amount={user2FixedTotal} total={result.totalExpenses} color="#bf6a4d" />
           <BudgetBar label="Creditcard" amount={fields.credit_card_bill} total={result.totalExpenses} color="#6b6252" />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <NumberField label="Gezamenlijke rekening (vast)" value={fields.joint_fixed} disabled={locked} onChange={(v) => update("joint_fixed", v)} />
-          <NumberField label="Boodschappen" value={fields.joint_groceries} disabled={locked} onChange={(v) => update("joint_groceries", v)} />
-          <NumberField label="Vaste kosten Jairo" value={fields.user1_fixed} disabled={locked} onChange={(v) => update("user1_fixed", v)} />
-          <NumberField label="Vaste kosten Naroa" value={fields.user2_fixed} disabled={locked} onChange={(v) => update("user2_fixed", v)} />
-          <NumberField label="Creditcard" value={fields.credit_card_bill} disabled={locked} onChange={(v) => update("credit_card_bill", v)} />
+        <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <NumberField label="Gezamenlijke rekening (vast)" value={fields.joint_fixed} disabled={locked} onChange={(v) => update("joint_fixed", v)} onBlur={handleSave} />
+          <NumberField label="Boodschappen" value={fields.joint_groceries} disabled={locked} onChange={(v) => update("joint_groceries", v)} onBlur={handleSave} />
+          <NumberField label="Creditcard" value={fields.credit_card_bill} disabled={locked} onChange={(v) => update("credit_card_bill", v)} onBlur={handleSave} />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <PersonalFixedList
+            name="Jairo"
+            assignee="user1"
+            expenses={personalFixedUser1}
+            total={user1FixedTotal}
+            locked={locked}
+            onAdd={handleAddPersonalFixed}
+            onDelete={handleDeleteExpense}
+            isPending={isPending}
+          />
+          <PersonalFixedList
+            name="Naroa"
+            assignee="user2"
+            expenses={personalFixedUser2}
+            total={user2FixedTotal}
+            locked={locked}
+            onAdd={handleAddPersonalFixed}
+            onDelete={handleDeleteExpense}
+            isPending={isPending}
+          />
         </div>
       </section>
 
@@ -300,10 +440,10 @@ export default function MonthForm({
           Extra uitgaven ({currency(extraTotal)})
         </h2>
         <ul className="mb-3 flex flex-col gap-2">
-          {expenses.map((e) => (
-            <li key={e.id} className="flex items-center justify-between rounded-xl bg-canvas px-3 py-2.5 text-sm">
-              <span className="flex items-center gap-2.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ASSIGNEE_DOT[e.assignee] }} />
+          {extraExpenses.map((e) => (
+            <li key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-canvas px-3 py-2.5 text-sm">
+              <span className="flex items-center gap-2.5 break-words">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: ASSIGNEE_DOT[e.assignee] }} />
                 {e.description} <span className="text-muted">· {ASSIGNEE_LABEL[e.assignee]}</span>
               </span>
               <div className="flex items-center gap-3">
@@ -316,11 +456,11 @@ export default function MonthForm({
               </div>
             </li>
           ))}
-          {expenses.length === 0 && <li className="text-sm text-muted">Geen extra uitgaven deze maand.</li>}
+          {extraExpenses.length === 0 && <li className="text-sm text-muted">Geen extra uitgaven deze maand.</li>}
         </ul>
         {!locked && (
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="flex flex-1 flex-col gap-1 text-sm">
               <span className="text-muted">Omschrijving</span>
               <input
                 value={newExpense.description}
@@ -328,30 +468,32 @@ export default function MonthForm({
                 className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted">Bedrag</span>
-              <input
-                type="number"
-                step="0.01"
-                value={newExpense.amount}
-                onChange={(e) => setNewExpense((n) => ({ ...n, amount: Number(e.target.value) }))}
-                className="w-28 rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted">Wie</span>
-              <select
-                value={newExpense.assignee}
-                onChange={(e) =>
-                  setNewExpense((n) => ({ ...n, assignee: e.target.value as typeof n.assignee }))
-                }
-                className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
-              >
-                <option value="joint">Gezamenlijk</option>
-                <option value="user1">Jairo</option>
-                <option value="user2">Naroa</option>
-              </select>
-            </label>
+            <div className="flex gap-2">
+              <label className="flex flex-1 flex-col gap-1 text-sm sm:flex-none">
+                <span className="text-muted">Bedrag</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newExpense.amount}
+                  onChange={(e) => setNewExpense((n) => ({ ...n, amount: Number(e.target.value) }))}
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant sm:w-28"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-sm sm:flex-none">
+                <span className="text-muted">Wie</span>
+                <select
+                  value={newExpense.assignee}
+                  onChange={(e) =>
+                    setNewExpense((n) => ({ ...n, assignee: e.target.value as typeof n.assignee }))
+                  }
+                  className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
+                >
+                  <option value="joint">Gezamenlijk</option>
+                  <option value="user1">Jairo</option>
+                  <option value="user2">Naroa</option>
+                </select>
+              </label>
+            </div>
             <button
               onClick={handleAddExpense}
               disabled={isPending}
