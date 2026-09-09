@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { CoupleSettings, Expense, MonthlyRecord, SavingsAllocation } from "@/lib/types";
+import type { CoupleSettings, Expense, MonthlyRecord, SavingsPot, SavingsTransaction } from "@/lib/types";
 
 export async function getCoupleSettings(): Promise<CoupleSettings> {
   const supabase = await createClient();
@@ -151,13 +151,33 @@ export async function getExpensesForRecords(recordIds: string[]): Promise<Expens
   return data;
 }
 
-export async function getSavingsAllocationsForRecord(recordId: string): Promise<SavingsAllocation[]> {
+export async function getSavingsPots(): Promise<SavingsPot[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("savings_pots").select("*").order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getSavingsTransactionsForRecord(recordId: string): Promise<SavingsTransaction[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("savings_allocations")
+    .from("savings_transactions")
     .select("*")
     .eq("monthly_record_id", recordId)
     .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getRecentSavingsTransactions(limit = 100): Promise<SavingsTransaction[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("savings_transactions")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
   if (error) throw new Error(error.message);
   return data;

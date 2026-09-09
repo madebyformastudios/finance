@@ -8,6 +8,9 @@ export default function NavBar({ email }: { email?: string | null }) {
           <Link href="/dashboard" className="hover:text-ink">
             Overzicht
           </Link>
+          <Link href="/spaardoelen" className="hover:text-ink">
+            Spaardoelen
+          </Link>
           <Link href="/history" className="hover:text-ink">
             Geschiedenis
           </Link>

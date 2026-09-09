@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getExpensesForRecord, getOrCreateMonthlyRecord, getSavingsAllocationsForRecord } from "@/lib/data";
+import {
+  getExpensesForRecord,
+  getOrCreateMonthlyRecord,
+  getSavingsPots,
+  getSavingsTransactionsForRecord,
+} from "@/lib/data";
 import { MONTH_NAMES } from "@/lib/types";
 import NavBar from "@/components/NavBar";
 import MonthForm from "@/components/MonthForm";
@@ -26,7 +31,8 @@ export default async function DashboardPage({
 
   const record = await getOrCreateMonthlyRecord(month, year);
   const expenses = await getExpensesForRecord(record.id);
-  const savingsAllocations = await getSavingsAllocationsForRecord(record.id);
+  const savingsPots = await getSavingsPots();
+  const savingsTransactions = await getSavingsTransactionsForRecord(record.id);
 
   const prev = month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
   const next = month === 12 ? { month: 1, year: year + 1 } : { month: month + 1, year };
@@ -47,7 +53,8 @@ export default async function DashboardPage({
           key={record.id}
           record={record}
           expenses={expenses}
-          savingsAllocations={savingsAllocations}
+          savingsPots={savingsPots}
+          savingsTransactions={savingsTransactions}
           monthLabel={`${MONTH_NAMES[month - 1]} ${year}`}
         />
       </main>

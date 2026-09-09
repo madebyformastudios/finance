@@ -11,11 +11,21 @@ export interface Expense {
   created_at: string;
 }
 
-export interface SavingsAllocation {
+export interface SavingsPot {
   id: string;
-  monthly_record_id: string;
-  goal_name: string;
+  name: string;
+  current_balance: number;
+  target_amount: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavingsTransaction {
+  id: string;
+  pot_id: string;
+  monthly_record_id: string | null;
   amount: number;
+  description: string;
   created_at: string;
 }
 

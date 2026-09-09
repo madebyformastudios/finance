@@ -38,7 +38,10 @@ Each user's recurring personal costs are itemized rows in `expenses` (`type = 'p
 
 ## Savings goals (Spaardoelen)
 
-The month's 50% savings pot can be split into named goals, stored in `savings_allocations` (`monthly_record_id`, `goal_name`, `amount`). The dashboard's "Spaardoelen" card (`components/SavingsGoals.tsx`) shows "Nog te verdelen" = savings pot − sum(allocations), colored sage/gray/terracotta for positive/zero/negative. Adding or editing a goal is blocked client-side (with an inline message) if the amount would exceed what's left to allocate; editing an existing goal correctly frees up its own current amount first before checking the new one against the limit. Goals aren't carried forward month to month — each month starts empty.
+Savings pots (`savings_pots`: `name`, `current_balance`, optional `target_amount`) are persistent, not scoped to a month — balances carry forward automatically. Every deposit or withdrawal is a row in `savings_transactions` (`pot_id`, `monthly_record_id` nullable, `amount` — positive for deposits, negative for withdrawals, `description`); a `savings_transactions_apply` trigger keeps `savings_pots.current_balance` in sync atomically, so the app only ever inserts transactions and never writes the balance directly.
+
+- **Dashboard** (`components/SavingsGoals.tsx`, under "Verdeling"): "Nog te verdelen" = this month's savings pot minus the sum of transactions already tagged with the current `monthly_record_id` — colored sage/gray/terracotta for positive/zero/negative. Allocating to a pot creates a transaction ("Maandelijkse inleg <maand>") and is blocked client-side if it would exceed what's left. A pot can also be created inline here.
+- **`/spaardoelen`**: a bento grid of every pot (balance, progress bar if it has a target), a "Geld opnemen" modal per card that creates a negative transaction (blocked client-side above the pot's current balance), a form to create new pots, and a full transaction history across all pots.
 
 ## Design
 

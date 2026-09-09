@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import { calculate } from "@/lib/calc";
-import type { Assignee, Expense, MonthlyRecord, SavingsAllocation } from "@/lib/types";
+import type { Assignee, Expense, MonthlyRecord, SavingsPot, SavingsTransaction } from "@/lib/types";
 import { addExpense, deleteExpense, saveMonthlyRecord, toggleLock } from "@/app/dashboard/actions";
 import Avatar from "@/components/Avatar";
 import Donut from "@/components/Donut";
@@ -151,12 +151,14 @@ function PersonalFixedList({
 export default function MonthForm({
   record,
   expenses,
-  savingsAllocations,
+  savingsPots,
+  savingsTransactions,
   monthLabel,
 }: {
   record: MonthlyRecord;
   expenses: Expense[];
-  savingsAllocations: SavingsAllocation[];
+  savingsPots: SavingsPot[];
+  savingsTransactions: SavingsTransaction[];
   monthLabel: string;
 }) {
   const [fields, setFields] = useState({
@@ -351,8 +353,10 @@ export default function MonthForm({
 
       <SavingsGoals
         monthlyRecordId={record.id}
+        monthLabel={monthLabel}
         savingsPot={result.savings}
-        allocations={savingsAllocations}
+        pots={savingsPots}
+        monthTransactions={savingsTransactions}
         locked={locked}
       />
 

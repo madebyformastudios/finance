@@ -165,30 +165,77 @@ create policy "expenses are writable by any authenticated user"
   with check (true);
 
 -- ─────────────────────────────────────────────────────────
--- savings_allocations: how a month's 50% savings pot (Spaarpot) is
--- distributed across named goals (Spaardoelen). Unallocated = savings pot -
--- sum(amount) for the month.
+-- savings_pots: persistent savings goals (Spaardoelen) whose balance
+-- carries forward automatically — not scoped to a single month.
+-- savings_transactions: the ledger. Positive amount = deposit (e.g. a
+-- month's allocation), negative = withdrawal (from /spaardoelen).
+-- monthly_record_id links a deposit back to the month it came from, so the
+-- dashboard can compute how much of *that* month's savings pot is already
+-- spoken for; withdrawals leave it null. current_balance on savings_pots is
+-- kept in sync by the apply_savings_transaction trigger below — the app
+-- never updates it directly, only inserts transactions.
 -- ─────────────────────────────────────────────────────────
-create table if not exists savings_allocations (
+create table if not exists savings_pots (
   id uuid primary key default gen_random_uuid(),
-  monthly_record_id uuid not null references monthly_records (id) on delete cascade,
-  goal_name text not null,
-  amount numeric(12, 2) not null check (amount > 0),
-  created_at timestamptz not null default now()
+  name text not null,
+  current_balance numeric(12, 2) not null default 0,
+  target_amount numeric(12, 2) check (target_amount is null or target_amount > 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-alter table savings_allocations enable row level security;
+alter table savings_pots enable row level security;
 
-create policy "savings allocations are readable by any authenticated user"
-  on savings_allocations for select
+create policy "savings pots are readable by any authenticated user"
+  on savings_pots for select
   to authenticated
   using (true);
 
-create policy "savings allocations are writable by any authenticated user"
-  on savings_allocations for all
+create policy "savings pots are writable by any authenticated user"
+  on savings_pots for all
   to authenticated
   using (true)
   with check (true);
+
+create table if not exists savings_transactions (
+  id uuid primary key default gen_random_uuid(),
+  pot_id uuid not null references savings_pots (id) on delete cascade,
+  monthly_record_id uuid references monthly_records (id) on delete set null,
+  amount numeric(12, 2) not null check (amount <> 0),
+  description text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table savings_transactions enable row level security;
+
+create policy "savings transactions are readable by any authenticated user"
+  on savings_transactions for select
+  to authenticated
+  using (true);
+
+create policy "savings transactions are insertable by any authenticated user"
+  on savings_transactions for insert
+  to authenticated
+  with check (true);
+
+create or replace function apply_savings_transaction()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.savings_pots
+  set current_balance = current_balance + new.amount,
+      updated_at = now()
+  where id = new.pot_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists savings_transactions_apply on savings_transactions;
+create trigger savings_transactions_apply
+  after insert on savings_transactions
+  for each row execute procedure apply_savings_transaction();
 
 -- Keep updated_at current on monthly_records.
 create or replace function set_updated_at()

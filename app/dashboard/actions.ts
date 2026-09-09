@@ -68,27 +68,23 @@ export async function deleteExpense(id: string) {
   revalidatePath("/history");
 }
 
-export async function addSavingsAllocation(input: {
+export async function createSavingsPot(input: { name: string; target_amount: number | null }) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("savings_pots").insert(input);
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard");
+  revalidatePath("/spaardoelen");
+}
+
+export async function allocateToSavingsPot(input: {
+  pot_id: string;
   monthly_record_id: string;
-  goal_name: string;
   amount: number;
+  description: string;
 }) {
   const supabase = await createClient();
-  const { error } = await supabase.from("savings_allocations").insert(input);
+  const { error } = await supabase.from("savings_transactions").insert(input);
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard");
-}
-
-export async function updateSavingsAllocation(id: string, amount: number) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("savings_allocations").update({ amount }).eq("id", id);
-  if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
-}
-
-export async function deleteSavingsAllocation(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("savings_allocations").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
+  revalidatePath("/spaardoelen");
 }

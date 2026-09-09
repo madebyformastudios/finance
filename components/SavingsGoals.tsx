@@ -1,147 +1,150 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import {
-  addSavingsAllocation,
-  deleteSavingsAllocation,
-  updateSavingsAllocation,
-} from "@/app/dashboard/actions";
-import type { SavingsAllocation } from "@/lib/types";
+import Link from "next/link";
+import { allocateToSavingsPot, createSavingsPot } from "@/app/dashboard/actions";
+import type { SavingsPot, SavingsTransaction } from "@/lib/types";
 
 const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
 function currency(n: number) {
   return eur.format(n);
 }
 
-function EditableAmount({
-  allocation,
-  max,
+function PotRow({
+  pot,
+  allocatedThisMonth,
+  unallocated,
   locked,
   isPending,
-  onSave,
+  onAllocate,
 }: {
-  allocation: SavingsAllocation;
-  max: number;
+  pot: SavingsPot;
+  allocatedThisMonth: number;
+  unallocated: number;
   locked: boolean;
   isPending: boolean;
-  onSave: (id: string, amount: number) => void;
+  onAllocate: (potId: string, amount: number) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(String(allocation.amount));
+  const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  function commit() {
-    const amount = Number(text) || 0;
-    if (amount <= 0) {
-      setError("Voer een bedrag groter dan 0 in.");
+  function handleAllocate() {
+    const value = Number(amount) || 0;
+    if (value <= 0) return;
+    if (value > unallocated) {
+      setError(`Dit is hoger dan het nog te verdelen bedrag (${currency(unallocated)}).`);
       return;
     }
-    if (amount > max) {
-      setError(`Dit is hoger dan het nog te verdelen bedrag (${currency(max)}).`);
-      return;
-    }
-    onSave(allocation.id, amount);
-    setEditing(false);
     setError(null);
-  }
-
-  if (!editing) {
-    return (
-      <button
-        onClick={() => !locked && setEditing(true)}
-        disabled={locked}
-        className="tabular-nums text-ink underline decoration-dotted underline-offset-2 disabled:no-underline"
-      >
-        {currency(allocation.amount)}
-      </button>
-    );
+    onAllocate(pot.id, value);
+    setAmount("");
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-1.5">
-        <input
-          type="number"
-          step="0.01"
-          autoFocus
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setError(null);
-          }}
-          onKeyDown={(e) => e.key === "Enter" && commit()}
-          className="w-24 rounded-lg border border-border bg-card px-2 py-1 text-right outline-none focus:border-dominant"
-        />
-        <button
-          onClick={commit}
-          disabled={isPending}
-          className="press rounded-lg bg-dominant px-2 py-1 text-xs font-medium text-dominant-ink hover:bg-dominant-soft"
-        >
-          Opslaan
-        </button>
+    <li className="flex flex-col gap-2 rounded-xl bg-canvas px-3 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <span className="break-words font-medium text-ink">{pot.name}</span>
+        <div className="flex items-center gap-3 text-muted">
+          <span>
+            Saldo: <span className="tabular-nums text-ink">{currency(pot.current_balance)}</span>
+          </span>
+          {allocatedThisMonth > 0 && (
+            <span className="tabular-nums text-surplus-ink">+{currency(allocatedThisMonth)} deze maand</span>
+          )}
+        </div>
       </div>
+      {!locked && (
+        <div className="flex items-end gap-2">
+          <input
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              setError(null);
+            }}
+            placeholder="Bedrag"
+            className="w-28 rounded-lg border border-border bg-card px-2 py-1.5 outline-none focus:border-dominant"
+          />
+          <button
+            onClick={handleAllocate}
+            disabled={isPending || !amount}
+            className="press rounded-lg bg-dominant px-3 py-1.5 text-xs font-medium text-dominant-ink hover:bg-dominant-soft disabled:opacity-50"
+          >
+            Toewijzen
+          </button>
+        </div>
+      )}
       {error && <span className="text-xs text-shortfall">{error}</span>}
-    </div>
+    </li>
   );
 }
 
 export default function SavingsGoals({
   monthlyRecordId,
+  monthLabel,
   savingsPot,
-  allocations,
+  pots,
+  monthTransactions,
   locked,
 }: {
   monthlyRecordId: string;
+  monthLabel: string;
   savingsPot: number;
-  allocations: SavingsAllocation[];
+  pots: SavingsPot[];
+  monthTransactions: SavingsTransaction[];
   locked: boolean;
 }) {
-  const [draft, setDraft] = useState({ goal_name: "", amount: "" });
-  const [addError, setAddError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [newPot, setNewPot] = useState({ name: "", target_amount: "" });
 
-  const allocatedTotal = useMemo(
-    () => allocations.reduce((sum, a) => sum + Number(a.amount), 0),
-    [allocations],
+  const allocatedByPot = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of monthTransactions) {
+      map.set(t.pot_id, (map.get(t.pot_id) ?? 0) + Number(t.amount));
+    }
+    return map;
+  }, [monthTransactions]);
+
+  const allocatedThisMonth = useMemo(
+    () => monthTransactions.reduce((sum, t) => sum + Number(t.amount), 0),
+    [monthTransactions],
   );
-  const unallocated = savingsPot - allocatedTotal;
+  const unallocated = savingsPot - allocatedThisMonth;
 
   const unallocatedColor =
     unallocated > 0 ? "text-surplus-ink" : unallocated === 0 ? "text-muted" : "text-shortfall";
   const unallocatedBg =
     unallocated > 0 ? "bg-surplus-soft" : unallocated === 0 ? "bg-canvas" : "bg-shortfall-soft";
 
-  function handleAdd() {
-    const amount = Number(draft.amount) || 0;
-    if (!draft.goal_name || amount <= 0) return;
-    if (amount > unallocated) {
-      setAddError(`Dit is hoger dan het nog te verdelen bedrag (${currency(unallocated)}).`);
-      return;
-    }
-    setAddError(null);
+  function handleAllocate(potId: string, amount: number) {
     startTransition(async () => {
-      await addSavingsAllocation({ monthly_record_id: monthlyRecordId, goal_name: draft.goal_name, amount });
-      setDraft({ goal_name: "", amount: "" });
+      await allocateToSavingsPot({
+        pot_id: potId,
+        monthly_record_id: monthlyRecordId,
+        amount,
+        description: `Maandelijkse inleg ${monthLabel}`,
+      });
     });
   }
 
-  function handleSaveAmount(id: string, amount: number) {
+  function handleCreatePot() {
+    if (!newPot.name) return;
+    const target = Number(newPot.target_amount) || 0;
     startTransition(async () => {
-      await updateSavingsAllocation(id, amount);
-    });
-  }
-
-  function handleDelete(id: string) {
-    startTransition(async () => {
-      await deleteSavingsAllocation(id);
+      await createSavingsPot({ name: newPot.name, target_amount: target > 0 ? target : null });
+      setNewPot({ name: "", target_amount: "" });
     });
   }
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5">
-      <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">
-        Spaardoelen
-      </h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-muted">Spaardoelen</h2>
+        <Link href="/spaardoelen" className="press text-sm text-dominant hover:underline">
+          Alle spaarpotjes →
+        </Link>
+      </div>
 
       <div className={`mb-4 flex items-center justify-between rounded-xl px-4 py-3 ${unallocatedBg}`}>
         <span className="text-sm text-ink">Nog te verdelen</span>
@@ -151,68 +154,48 @@ export default function SavingsGoals({
       </div>
 
       <ul className="mb-3 flex flex-col gap-2">
-        {allocations.map((a) => (
-          <li
-            key={a.id}
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-canvas px-3 py-2.5 text-sm"
-          >
-            <span className="break-words">{a.goal_name}</span>
-            <div className="flex items-center gap-3">
-              <EditableAmount
-                allocation={a}
-                max={unallocated + Number(a.amount)}
-                locked={locked}
-                isPending={isPending}
-                onSave={handleSaveAmount}
-              />
-              {!locked && (
-                <button onClick={() => handleDelete(a.id)} className="press text-muted hover:text-shortfall">
-                  Verwijderen
-                </button>
-              )}
-            </div>
-          </li>
+        {pots.map((pot) => (
+          <PotRow
+            key={pot.id}
+            pot={pot}
+            allocatedThisMonth={allocatedByPot.get(pot.id) ?? 0}
+            unallocated={unallocated}
+            locked={locked}
+            isPending={isPending}
+            onAllocate={handleAllocate}
+          />
         ))}
-        {allocations.length === 0 && <li className="text-sm text-muted">Nog geen spaardoelen ingesteld.</li>}
+        {pots.length === 0 && <li className="text-sm text-muted">Nog geen spaarpotjes aangemaakt.</li>}
       </ul>
 
       {!locked && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="flex flex-1 flex-col gap-1 text-sm">
-              <span className="text-muted">Doel</span>
-              <input
-                value={draft.goal_name}
-                placeholder="bijv. Vakantie"
-                onChange={(e) => {
-                  setDraft((d) => ({ ...d, goal_name: e.target.value }));
-                  setAddError(null);
-                }}
-                className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted">Bedrag</span>
-              <input
-                type="number"
-                step="0.01"
-                value={draft.amount}
-                onChange={(e) => {
-                  setDraft((d) => ({ ...d, amount: e.target.value }));
-                  setAddError(null);
-                }}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant sm:w-28"
-              />
-            </label>
-            <button
-              onClick={handleAdd}
-              disabled={isPending || !draft.goal_name || !draft.amount}
-              className="press rounded-xl bg-dominant px-4 py-2 text-sm font-medium text-dominant-ink hover:bg-dominant-soft disabled:opacity-50"
-            >
-              Voeg toe
-            </button>
-          </div>
-          {addError && <p className="text-sm text-shortfall">{addError}</p>}
+        <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            <span className="text-muted">Naam nieuw spaarpotje</span>
+            <input
+              value={newPot.name}
+              placeholder="bijv. Onderhoud Motor"
+              onChange={(e) => setNewPot((n) => ({ ...n, name: e.target.value }))}
+              className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Doelbedrag (optioneel)</span>
+            <input
+              type="number"
+              step="0.01"
+              value={newPot.target_amount}
+              onChange={(e) => setNewPot((n) => ({ ...n, target_amount: e.target.value }))}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant sm:w-32"
+            />
+          </label>
+          <button
+            onClick={handleCreatePot}
+            disabled={isPending || !newPot.name}
+            className="press rounded-xl bg-dominant px-4 py-2 text-sm font-medium text-dominant-ink hover:bg-dominant-soft disabled:opacity-50"
+          >
+            + Nieuw spaarpotje
+          </button>
         </div>
       )}
     </section>
