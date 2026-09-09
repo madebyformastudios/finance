@@ -8,6 +8,7 @@ import { addExpense, deleteExpense, saveMonthlyRecord, toggleLock } from "@/app/
 import Avatar from "@/components/Avatar";
 import Donut from "@/components/Donut";
 import CountUp from "@/components/CountUp";
+import NumberField from "@/components/NumberField";
 
 const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
 function currency(n: number) {
@@ -25,40 +26,6 @@ const ASSIGNEE_DOT: Record<string, string> = {
   user2: "#d19a3d",
   joint: "#6b6252",
 };
-
-function NumberField({
-  label,
-  value,
-  onChange,
-  onBlur,
-  disabled,
-  avatar,
-}: {
-  label: string;
-  value: number;
-  onChange: (n: number) => void;
-  onBlur?: () => void;
-  disabled?: boolean;
-  avatar?: string;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5 text-sm">
-      <span className="flex items-center gap-2 text-muted">
-        {avatar && <Avatar name={avatar} size={20} />}
-        {label}
-      </span>
-      <input
-        type="number"
-        step="0.01"
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onBlur={onBlur}
-        className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink outline-none transition focus:border-dominant disabled:bg-canvas disabled:text-muted"
-      />
-    </label>
-  );
-}
 
 function BudgetBar({
   label,
@@ -112,12 +79,13 @@ function PersonalFixedList({
   onDelete: (id: string) => void;
   isPending: boolean;
 }) {
-  const [draft, setDraft] = useState({ description: "", amount: 0 });
+  const [draft, setDraft] = useState({ description: "", amount: "" });
 
   function handleAdd() {
-    if (!draft.description || draft.amount === 0) return;
-    onAdd(assignee, draft.description, draft.amount);
-    setDraft({ description: "", amount: 0 });
+    const amount = Number(draft.amount) || 0;
+    if (!draft.description || amount === 0) return;
+    onAdd(assignee, draft.description, amount);
+    setDraft({ description: "", amount: "" });
   }
 
   return (
@@ -162,7 +130,7 @@ function PersonalFixedList({
               type="number"
               step="0.01"
               value={draft.amount}
-              onChange={(e) => setDraft((d) => ({ ...d, amount: Number(e.target.value) }))}
+              onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))}
               className="w-full rounded-lg border border-border bg-card px-3 py-1.5 outline-none focus:border-dominant sm:w-24"
             />
           </label>
@@ -195,7 +163,7 @@ export default function MonthForm({
     joint_groceries: record.joint_groceries,
     credit_card_bill: record.credit_card_bill,
   });
-  const [newExpense, setNewExpense] = useState({ description: "", amount: 0, assignee: "joint" as const });
+  const [newExpense, setNewExpense] = useState({ description: "", amount: "", assignee: "joint" as const });
   const [isPending, startTransition] = useTransition();
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -248,10 +216,16 @@ export default function MonthForm({
   }
 
   function handleAddExpense() {
-    if (!newExpense.description || newExpense.amount === 0) return;
+    const amount = Number(newExpense.amount) || 0;
+    if (!newExpense.description || amount === 0) return;
     startTransition(async () => {
-      await addExpense({ monthly_record_id: record.id, ...newExpense });
-      setNewExpense({ description: "", amount: 0, assignee: "joint" });
+      await addExpense({
+        monthly_record_id: record.id,
+        description: newExpense.description,
+        amount,
+        assignee: newExpense.assignee,
+      });
+      setNewExpense({ description: "", amount: "", assignee: "joint" });
     });
   }
 
@@ -475,7 +449,7 @@ export default function MonthForm({
                   type="number"
                   step="0.01"
                   value={newExpense.amount}
-                  onChange={(e) => setNewExpense((n) => ({ ...n, amount: Number(e.target.value) }))}
+                  onChange={(e) => setNewExpense((n) => ({ ...n, amount: e.target.value }))}
                   className="w-full rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant sm:w-28"
                 />
               </label>

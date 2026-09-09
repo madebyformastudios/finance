@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import type { CoupleSettings } from "@/lib/types";
 import { saveCoupleSettings } from "@/app/settings/actions";
+import NumberField from "@/components/NumberField";
 
 export default function SettingsForm({ settings }: { settings: CoupleSettings }) {
   const [fields, setFields] = useState({
@@ -31,26 +32,16 @@ export default function SettingsForm({ settings }: { settings: CoupleSettings })
         ...) worden per maand ingesteld op het dashboard en nemen automatisch de vorige maand over.
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted">Gezamenlijke rekening (vast)</span>
-          <input
-            type="number"
-            step="0.01"
-            value={fields.joint_fixed}
-            onChange={(e) => update("joint_fixed", Number(e.target.value))}
-            className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted">Boodschappen</span>
-          <input
-            type="number"
-            step="0.01"
-            value={fields.joint_groceries}
-            onChange={(e) => update("joint_groceries", Number(e.target.value))}
-            className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
-          />
-        </label>
+        <NumberField
+          label="Gezamenlijke rekening (vast)"
+          value={fields.joint_fixed}
+          onChange={(v) => update("joint_fixed", v)}
+        />
+        <NumberField
+          label="Boodschappen"
+          value={fields.joint_groceries}
+          onChange={(v) => update("joint_groceries", v)}
+        />
       </div>
       <div className="mt-5 flex items-center gap-3">
         <button
