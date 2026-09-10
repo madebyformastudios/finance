@@ -2,6 +2,27 @@
 -- Run this in the Supabase SQL editor (or via `supabase db push`).
 
 -- ─────────────────────────────────────────────────────────
+-- is_whitelisted_user: this is a private two-person app — every table below
+-- is shared (not scoped by user_id), so row ownership can't gate access.
+-- Instead every policy checks the caller's JWT email against a hardcoded
+-- allowlist, so a non-whitelisted Google account gets zero rows even if it
+-- bypasses the frontend/middleware guard. Keep this list in sync with
+-- lib/auth/whitelist.ts.
+-- ─────────────────────────────────────────────────────────
+create or replace function public.is_whitelisted_user()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select coalesce(lower(auth.jwt() ->> 'email'), '') in (
+    'jairolopes99@gmail.com',
+    'njt0404@gmail.com'
+  );
+$$;
+
+-- ─────────────────────────────────────────────────────────
 -- profiles: one row per authenticated user (mirrors auth.users)
 -- ─────────────────────────────────────────────────────────
 create table if not exists profiles (
@@ -112,27 +133,27 @@ create table if not exists monthly_records (
 
 alter table monthly_records enable row level security;
 
-create policy "monthly records are readable by any authenticated user"
+create policy "monthly records are readable by whitelisted users"
   on monthly_records for select
   to authenticated
-  using (true);
+  using (is_whitelisted_user());
 
-create policy "monthly records are insertable by any authenticated user"
+create policy "monthly records are insertable by whitelisted users"
   on monthly_records for insert
   to authenticated
-  with check (true);
+  with check (is_whitelisted_user());
 
 -- Locked months can only be edited by first unlocking them (enforced in app logic + this check).
-create policy "unlocked monthly records are editable by any authenticated user"
+create policy "unlocked monthly records are editable by whitelisted users"
   on monthly_records for update
   to authenticated
-  using (true)
-  with check (true);
+  using (is_whitelisted_user())
+  with check (is_whitelisted_user());
 
-create policy "monthly records are deletable by any authenticated user"
+create policy "monthly records are deletable by whitelisted users"
   on monthly_records for delete
   to authenticated
-  using (locked_status = false);
+  using (is_whitelisted_user() and locked_status = false);
 
 -- ─────────────────────────────────────────────────────────
 -- expenses: line items linked to a monthly_record.
@@ -153,16 +174,16 @@ create table if not exists expenses (
 
 alter table expenses enable row level security;
 
-create policy "expenses are readable by any authenticated user"
+create policy "expenses are readable by whitelisted users"
   on expenses for select
   to authenticated
-  using (true);
+  using (is_whitelisted_user());
 
-create policy "expenses are writable by any authenticated user"
+create policy "expenses are writable by whitelisted users"
   on expenses for all
   to authenticated
-  using (true)
-  with check (true);
+  using (is_whitelisted_user())
+  with check (is_whitelisted_user());
 
 -- ─────────────────────────────────────────────────────────
 -- savings_pots: persistent savings goals (Spaardoelen) whose balance
@@ -186,16 +207,16 @@ create table if not exists savings_pots (
 
 alter table savings_pots enable row level security;
 
-create policy "savings pots are readable by any authenticated user"
+create policy "savings pots are readable by whitelisted users"
   on savings_pots for select
   to authenticated
-  using (true);
+  using (is_whitelisted_user());
 
-create policy "savings pots are writable by any authenticated user"
+create policy "savings pots are writable by whitelisted users"
   on savings_pots for all
   to authenticated
-  using (true)
-  with check (true);
+  using (is_whitelisted_user())
+  with check (is_whitelisted_user());
 
 create table if not exists savings_transactions (
   id uuid primary key default gen_random_uuid(),
@@ -208,15 +229,15 @@ create table if not exists savings_transactions (
 
 alter table savings_transactions enable row level security;
 
-create policy "savings transactions are readable by any authenticated user"
+create policy "savings transactions are readable by whitelisted users"
   on savings_transactions for select
   to authenticated
-  using (true);
+  using (is_whitelisted_user());
 
-create policy "savings transactions are insertable by any authenticated user"
+create policy "savings transactions are insertable by whitelisted users"
   on savings_transactions for insert
   to authenticated
-  with check (true);
+  with check (is_whitelisted_user());
 
 create or replace function apply_savings_transaction()
 returns trigger
@@ -253,9 +274,3 @@ drop trigger if exists monthly_records_set_updated_at on monthly_records;
 create trigger monthly_records_set_updated_at
   before update on monthly_records
   for each row execute procedure set_updated_at();
-
--- NOTE on auth scope: the PRD calls for restricting login to two specific
--- Google accounts. For now, RLS only requires `authenticated` (any Google
--- account can sign in and read/write). To restrict later, add an email
--- allowlist check (e.g. `auth.jwt() ->> 'email' in (...)`) to each policy's
--- `using`/`with check` clause, or filter at the Google OAuth consent screen.
