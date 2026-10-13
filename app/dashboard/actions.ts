@@ -56,16 +56,34 @@ export async function addExpense(input: {
   });
 
   if (error) throw new Error(error.message);
+  if (input.type === "personal_fixed") await markPersonalFixedManaged(input.monthly_record_id);
   revalidatePath("/dashboard");
   revalidatePath("/history");
 }
 
 export async function deleteExpense(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("expenses").delete().eq("id", id);
+  const { data: deleted, error } = await supabase
+    .from("expenses")
+    .delete()
+    .eq("id", id)
+    .select("monthly_record_id, type")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (deleted?.type === "personal_fixed") await markPersonalFixedManaged(deleted.monthly_record_id);
   revalidatePath("/dashboard");
   revalidatePath("/history");
+}
+
+// Once someone edits a month's fixed costs by hand, carry-forward must never
+// run for that month again (it would resurrect a deliberate deletion).
+async function markPersonalFixedManaged(monthlyRecordId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("monthly_records")
+    .update({ personal_fixed_cloned: true })
+    .eq("id", monthlyRecordId);
+  if (error) throw new Error(error.message);
 }
 
 export async function createSavingsPot(input: { name: string; target_amount: number | null }) {

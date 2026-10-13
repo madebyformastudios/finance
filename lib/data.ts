@@ -60,14 +60,41 @@ export async function getOrCreateMonthlyRecord(
 }
 
 // Carries personal_fixed expenses forward from the nearest prior month that
-// has any, resolved lazily on first visit to a month (not just at creation
-// time — months can get created empty by browsing forward before earlier
-// months are filled in). Runs at most once per month: `personal_fixed_cloned`
-// is set afterward regardless of whether anything was found, so a later
-// deliberate deletion is never re-cloned back in.
+// has any, resolved lazily on visit (not just at creation time — months can
+// get created empty by browsing forward before earlier months are filled in).
+// `personal_fixed_cloned` is only set once the month has its own items
+// (cloned, or already present), never when there was simply nothing to clone
+// yet — otherwise a month visited before its predecessor was filled in would
+// stay empty forever. It's also set when the user adds/deletes a fixed cost
+// by hand, so a deliberate deletion is never re-cloned back in.
 async function resolvePersonalFixedCarryForward(record: MonthlyRecord): Promise<void> {
   if (record.personal_fixed_cloned) return;
 
+  const supabase = await createClient();
+
+  const { count: ownCount, error: ownError } = await supabase
+    .from("expenses")
+    .select("id", { count: "exact", head: true })
+    .eq("monthly_record_id", record.id)
+    .eq("type", "personal_fixed");
+
+  if (ownError) throw new Error(ownError.message);
+
+  if ((ownCount ?? 0) === 0) {
+    const cloned = await clonePersonalFixedFromPriorMonth(record);
+    if (!cloned) return;
+  }
+
+  const { error: flagError } = await supabase
+    .from("monthly_records")
+    .update({ personal_fixed_cloned: true })
+    .eq("id", record.id);
+
+  if (flagError) throw new Error(flagError.message);
+  record.personal_fixed_cloned = true;
+}
+
+async function clonePersonalFixedFromPriorMonth(record: MonthlyRecord): Promise<boolean> {
   const supabase = await createClient();
 
   const { data: priorRecords, error: priorError } = await supabase
@@ -80,39 +107,32 @@ async function resolvePersonalFixedCarryForward(record: MonthlyRecord): Promise<
 
   if (priorError) throw new Error(priorError.message);
 
-  if (priorRecords && priorRecords.length > 0) {
-    const priorExpenses = await getExpensesForRecords(priorRecords.map((r) => r.id));
-    const personalFixedByRecord = new Map<string, Expense[]>();
-    for (const e of priorExpenses) {
-      if (e.type !== "personal_fixed") continue;
-      const list = personalFixedByRecord.get(e.monthly_record_id) ?? [];
-      list.push(e);
-      personalFixedByRecord.set(e.monthly_record_id, list);
-    }
+  if (!priorRecords || priorRecords.length === 0) return false;
 
-    const nearestWithItems = priorRecords.find((r) => (personalFixedByRecord.get(r.id)?.length ?? 0) > 0);
-    if (nearestWithItems) {
-      const items = personalFixedByRecord.get(nearestWithItems.id)!;
-      const { error: insertError } = await supabase.from("expenses").insert(
-        items.map((e) => ({
-          monthly_record_id: record.id,
-          type: "personal_fixed" as const,
-          description: e.description,
-          amount: e.amount,
-          assignee: e.assignee,
-        })),
-      );
-      if (insertError) throw new Error(insertError.message);
-    }
+  const priorExpenses = await getExpensesForRecords(priorRecords.map((r) => r.id));
+  const personalFixedByRecord = new Map<string, Expense[]>();
+  for (const e of priorExpenses) {
+    if (e.type !== "personal_fixed") continue;
+    const list = personalFixedByRecord.get(e.monthly_record_id) ?? [];
+    list.push(e);
+    personalFixedByRecord.set(e.monthly_record_id, list);
   }
 
-  const { error: flagError } = await supabase
-    .from("monthly_records")
-    .update({ personal_fixed_cloned: true })
-    .eq("id", record.id);
+  const nearestWithItems = priorRecords.find((r) => (personalFixedByRecord.get(r.id)?.length ?? 0) > 0);
+  if (!nearestWithItems) return false;
 
-  if (flagError) throw new Error(flagError.message);
-  record.personal_fixed_cloned = true;
+  const items = personalFixedByRecord.get(nearestWithItems.id)!;
+  const { error: insertError } = await supabase.from("expenses").insert(
+    items.map((e) => ({
+      monthly_record_id: record.id,
+      type: "personal_fixed" as const,
+      description: e.description,
+      amount: e.amount,
+      assignee: e.assignee,
+    })),
+  );
+  if (insertError) throw new Error(insertError.message);
+  return true;
 }
 
 export async function getExpensesForRecord(recordId: string): Promise<Expense[]> {
