@@ -5,15 +5,15 @@ A shared monthly finance tracker for two users, built per `Finance_Tracker_PRD.p
 ## Stack
 
 - Next.js 16 (App Router, Turbopack) + TypeScript
-- Tailwind CSS + Framer Motion
+- Tailwind CSS
 - Supabase (Postgres + Auth with Google OAuth)
 
 ## Setup
 
 1. Create a Supabase project.
 2. In **Authentication → Providers**, enable Google and configure the OAuth client (redirect URL: `<your-app-url>/auth/callback`, and `http://localhost:3000/auth/callback` for local dev).
-3. In the Supabase SQL editor, run `supabase/schema.sql` to create tables, RLS policies, and the trigger that creates a `profiles` row on first sign-in.
-4. Copy `.env.local.example` to `.env.local` and fill in your project's URL and anon key (Project Settings → API).
+3. In the Supabase SQL editor, run `supabase/schema.sql` to create tables, RLS policies, and the trigger that blocks sign-ups from any email that is not on the allowlist. Edit the two emails in `supabase/schema.sql` and `lib/auth/whitelist.ts` to change who may log in.
+4. Copy `.env.local.example` to `.env.local` and fill in your project's URL and anon key (Project Settings → API). Set `CRON_SECRET` in Vercel too (the keep-alive cron needs it).
 5. Install deps and run:
 
    ```bash
@@ -49,6 +49,5 @@ The UI follows `DESIGN.md`: Dutch-only copy throughout, a warm off-white/deep-gr
 
 ## Notes / follow-ups
 
-- **Auth scope**: per the PRD, login should eventually be restricted to two specific Google accounts. For now any Google account can sign in (RLS only requires `authenticated`). To lock it down, add an email allowlist check to the RLS policies in `supabase/schema.sql` (see the note at the bottom of that file) once the two emails are confirmed.
 - **Locking**: either user can edit an open month; either can lock/unlock it from the dashboard. Locked months are read-only (enforced both in the UI and in RLS/update policies).
 - Settings (`/settings`) hold the joint fixed/groceries defaults used to pre-fill new months. Personal fixed costs are no longer a single default — they carry over per item from the previous month instead (see above).

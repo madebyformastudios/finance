@@ -2,13 +2,24 @@
 -- Run this in the Supabase SQL editor (or via `supabase db push`).
 
 -- ─────────────────────────────────────────────────────────
--- is_whitelisted_user: this is a private two-person app — every table below
--- is shared (not scoped by user_id), so row ownership can't gate access.
--- Instead every policy checks the caller's JWT email against a hardcoded
--- allowlist, so a non-whitelisted Google account gets zero rows even if it
--- bypasses the frontend/middleware guard. Keep this list in sync with
--- lib/auth/whitelist.ts.
+-- Allowlist: this is a private two-person app. The same list is enforced
+-- three times: at sign-up (block_unlisted_signup, so outsiders can't even
+-- create an account), in every RLS policy (is_whitelisted_user), and in the
+-- Next.js proxy (lib/auth/whitelist.ts — keep that list in sync).
+-- Incremental changes to an existing project live in supabase/migrations/.
 -- ─────────────────────────────────────────────────────────
+create or replace function public.is_whitelisted_email(email text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(lower(email), '') in (
+    'jairolopes99@gmail.com',
+    'njt0404@gmail.com'
+  );
+$$;
+
 create or replace function public.is_whitelisted_user()
 returns boolean
 language sql
@@ -16,70 +27,28 @@ stable
 security invoker
 set search_path = ''
 as $$
-  select coalesce(lower(auth.jwt() ->> 'email'), '') in (
-    'jairolopes99@gmail.com',
-    'njt0404@gmail.com'
-  );
+  select public.is_whitelisted_email(auth.jwt() ->> 'email');
 $$;
 
--- ─────────────────────────────────────────────────────────
--- profiles: one row per authenticated user (mirrors auth.users)
--- ─────────────────────────────────────────────────────────
-create table if not exists profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
-  email text not null,
-  display_name text,
-  slot smallint check (slot in (1, 2)), -- which side of the couple (User1/User2); null until assigned
-  created_at timestamptz not null default now()
-);
-
-alter table profiles enable row level security;
-
-create policy "profiles are readable by any authenticated user"
-  on profiles for select
-  to authenticated
-  using (true);
-
-create policy "users can upsert their own profile"
-  on profiles for insert
-  to authenticated
-  with check (auth.uid() = id);
-
-create policy "users can update their own profile"
-  on profiles for update
-  to authenticated
-  using (auth.uid() = id);
-
--- Auto-create a profile row on first sign-in.
-create or replace function handle_new_user()
+create or replace function public.block_unlisted_signup()
 returns trigger
 language plpgsql
-security definer set search_path = public
+set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, email, display_name)
-  values (new.id, new.email, coalesce(new.raw_user_meta_data ->> 'full_name', new.email))
-  on conflict (id) do nothing;
+  if not public.is_whitelisted_email(new.email) then
+    raise exception 'Sign-ups are closed for this app.';
+  end if;
   return new;
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure handle_new_user();
+revoke execute on function public.block_unlisted_signup() from public, anon, authenticated;
 
--- handle_new_user only makes sense as an auth.users insert trigger (it
--- references NEW) — revoke direct RPC access so it can't be called via
--- PostgREST by anon/authenticated roles.
-revoke execute on function handle_new_user() from public, anon, authenticated;
-
--- Backfill profiles for any auth.users created before this trigger existed
--- (e.g. anyone who signed in before schema.sql was first run).
-insert into public.profiles (id, email, display_name)
-select id, email, coalesce(raw_user_meta_data ->> 'full_name', email)
-from auth.users
-on conflict (id) do nothing;
+drop trigger if exists block_unlisted_signup on auth.users;
+create trigger block_unlisted_signup
+  before insert on auth.users
+  for each row execute function public.block_unlisted_signup();
 
 -- ─────────────────────────────────────────────────────────
 -- couple_settings: single-row config with the shared/default fixed costs
@@ -95,15 +64,16 @@ insert into couple_settings (id) values (true) on conflict (id) do nothing;
 
 alter table couple_settings enable row level security;
 
-create policy "settings are readable by any authenticated user"
+create policy "settings are readable by whitelisted users"
   on couple_settings for select
   to authenticated
-  using (true);
+  using (is_whitelisted_user());
 
-create policy "settings are editable by any authenticated user"
+create policy "settings are editable by whitelisted users"
   on couple_settings for update
   to authenticated
-  using (true);
+  using (is_whitelisted_user())
+  with check (is_whitelisted_user());
 
 -- ─────────────────────────────────────────────────────────
 -- monthly_records: one row per calendar month
@@ -125,7 +95,6 @@ create table if not exists monthly_records (
   -- once, lazily, on first visit — never re-cloned afterward, so a
   -- deliberate deletion sticks.
   personal_fixed_cloned boolean not null default false,
-  created_by uuid references profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (month, year)
@@ -179,11 +148,34 @@ create policy "expenses are readable by whitelisted users"
   to authenticated
   using (is_whitelisted_user());
 
-create policy "expenses are writable by whitelisted users"
-  on expenses for all
+-- Locked months are read-only: writes are only allowed while the parent month is open.
+create or replace function public.month_is_open(record_id uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.monthly_records
+    where id = record_id and not locked_status
+  );
+$$;
+
+create policy "expenses are insertable in open months"
+  on expenses for insert
   to authenticated
-  using (is_whitelisted_user())
-  with check (is_whitelisted_user());
+  with check (is_whitelisted_user() and month_is_open(monthly_record_id));
+
+create policy "expenses are updatable in open months"
+  on expenses for update
+  to authenticated
+  using (is_whitelisted_user() and month_is_open(monthly_record_id))
+  with check (is_whitelisted_user() and month_is_open(monthly_record_id));
+
+create policy "expenses are deletable in open months"
+  on expenses for delete
+  to authenticated
+  using (is_whitelisted_user() and month_is_open(monthly_record_id));
 
 -- ─────────────────────────────────────────────────────────
 -- savings_pots: persistent savings goals (Spaardoelen) whose balance
@@ -199,7 +191,7 @@ create policy "expenses are writable by whitelisted users"
 create table if not exists savings_pots (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  current_balance numeric(12, 2) not null default 0,
+  current_balance numeric(12, 2) not null default 0 check (current_balance >= 0),
   target_amount numeric(12, 2) check (target_amount is null or target_amount > 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -224,7 +216,9 @@ create table if not exists savings_transactions (
   monthly_record_id uuid references monthly_records (id) on delete set null,
   amount numeric(12, 2) not null check (amount <> 0),
   description text not null default '',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- deposits (linked to a month) are positive; withdrawals have no month
+  check (monthly_record_id is null or amount > 0)
 );
 
 alter table savings_transactions enable row level security;
@@ -234,10 +228,10 @@ create policy "savings transactions are readable by whitelisted users"
   to authenticated
   using (is_whitelisted_user());
 
-create policy "savings transactions are insertable by whitelisted users"
+create policy "savings transactions are insertable in open months"
   on savings_transactions for insert
   to authenticated
-  with check (is_whitelisted_user());
+  with check (is_whitelisted_user() and (monthly_record_id is null or month_is_open(monthly_record_id)));
 
 create or replace function apply_savings_transaction()
 returns trigger
@@ -274,3 +268,10 @@ drop trigger if exists monthly_records_set_updated_at on monthly_records;
 create trigger monthly_records_set_updated_at
   before update on monthly_records
   for each row execute procedure set_updated_at();
+
+-- ─────────────────────────────────────────────────────────
+-- Tighten default grants (RLS already blocks the rest). anon keeps SELECT:
+-- the keep-alive cron queries with the anon key.
+-- ─────────────────────────────────────────────────────────
+revoke truncate, references, trigger on all tables in schema public from anon, authenticated;
+revoke insert, update, delete on all tables in schema public from anon;

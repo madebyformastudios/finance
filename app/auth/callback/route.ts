@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
 
   // Behind Vercel's proxy, request.url's origin can be an internal address
   // rather than the public host the browser is actually on — redirecting
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
   // constructed NextResponse.redirect(). This removes any ambiguity about
   // whether the session cookies from exchangeCodeForSession actually land
   // on the response the browser receives.
-  const response = NextResponse.redirect(`${redirectOrigin}${next}`);
+  const response = NextResponse.redirect(`${redirectOrigin}/dashboard`);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
