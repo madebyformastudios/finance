@@ -1,20 +1,30 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { motion } from "framer-motion";
-import { calculate } from "@/lib/calc";
+import { useMemo, useRef, useState } from "react";
+import { calculateMonth } from "@/lib/calc";
+import { currency } from "@/lib/format";
 import type { Assignee, Expense, MonthlyRecord, SavingsPot, SavingsTransaction } from "@/lib/types";
-import { addExpense, deleteExpense, saveMonthlyRecord, toggleLock } from "@/app/dashboard/actions";
+import {
+  addExpense,
+  deleteExpense,
+  saveMonthlyRecord,
+  toggleLock,
+  type RecordField,
+} from "@/app/dashboard/actions";
 import Avatar from "@/components/Avatar";
 import Donut from "@/components/Donut";
 import CountUp from "@/components/CountUp";
 import NumberField from "@/components/NumberField";
 import SavingsGoals from "@/components/SavingsGoals";
+import { useAction } from "@/components/useAction";
 
-const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
-function currency(n: number) {
-  return eur.format(n);
-}
+const RECORD_FIELDS: RecordField[] = [
+  "user1_income",
+  "user2_income",
+  "joint_fixed",
+  "joint_groceries",
+  "credit_card_bill",
+];
 
 const ASSIGNEE_LABEL: Record<string, string> = {
   user1: "Jairo",
@@ -76,7 +86,7 @@ function PersonalFixedList({
   expenses: Expense[];
   total: number;
   locked: boolean;
-  onAdd: (assignee: Assignee, description: string, amount: number) => void;
+  onAdd: (assignee: Assignee, description: string, amount: number, onDone: () => void) => void;
   onDelete: (id: string) => void;
   isPending: boolean;
 }) {
@@ -84,9 +94,8 @@ function PersonalFixedList({
 
   function handleAdd() {
     const amount = Number(draft.amount) || 0;
-    if (!draft.description || amount === 0) return;
-    onAdd(assignee, draft.description, amount);
-    setDraft({ description: "", amount: "" });
+    if (!draft.description.trim() || amount === 0) return;
+    onAdd(assignee, draft.description, amount, () => setDraft({ description: "", amount: "" }));
   }
 
   return (
@@ -167,101 +176,83 @@ export default function MonthForm({
   savingsTransactions: SavingsTransaction[];
   monthLabel: string;
 }) {
-  const [fields, setFields] = useState({
+  const initialFields = {
     user1_income: record.user1_income,
     user2_income: record.user2_income,
     joint_fixed: record.joint_fixed,
     joint_groceries: record.joint_groceries,
     credit_card_bill: record.credit_card_bill,
-  });
+  };
+  const [fields, setFields] = useState(initialFields);
+  // What the server last confirmed, so a blur without a change sends nothing.
+  const savedFields = useRef({ ...initialFields });
   const [newExpense, setNewExpense] = useState({ description: "", amount: "", assignee: "joint" as const });
-  const [isPending, startTransition] = useTransition();
+  const { run, isPending, error } = useAction();
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   const locked = record.locked_status;
 
-  const extraExpenses = useMemo(() => expenses.filter((e) => e.type === "extra"), [expenses]);
-  const personalFixedUser1 = useMemo(
-    () => expenses.filter((e) => e.type === "personal_fixed" && e.assignee === "user1"),
-    [expenses],
-  );
-  const personalFixedUser2 = useMemo(
-    () => expenses.filter((e) => e.type === "personal_fixed" && e.assignee === "user2"),
-    [expenses],
-  );
+  const extraExpenses = expenses.filter((e) => e.type === "extra");
+  const personalFixedUser1 = expenses.filter((e) => e.type === "personal_fixed" && e.assignee === "user1");
+  const personalFixedUser2 = expenses.filter((e) => e.type === "personal_fixed" && e.assignee === "user2");
 
-  const extraTotal = useMemo(() => extraExpenses.reduce((sum, e) => sum + Number(e.amount), 0), [extraExpenses]);
-  const user1FixedTotal = useMemo(
-    () => personalFixedUser1.reduce((sum, e) => sum + Number(e.amount), 0),
-    [personalFixedUser1],
-  );
-  const user2FixedTotal = useMemo(
-    () => personalFixedUser2.reduce((sum, e) => sum + Number(e.amount), 0),
-    [personalFixedUser2],
-  );
-
-  const result = useMemo(
-    () =>
-      calculate({
-        user1Income: fields.user1_income,
-        user2Income: fields.user2_income,
-        user1Fixed: user1FixedTotal,
-        user2Fixed: user2FixedTotal,
-        jointFixed: fields.joint_fixed,
-        jointGroceries: fields.joint_groceries,
-        extraExpenses: extraTotal,
-        creditCardBill: fields.credit_card_bill,
-      }),
-    [fields, extraTotal, user1FixedTotal, user2FixedTotal],
-  );
+  const result = useMemo(() => calculateMonth(fields, expenses), [fields, expenses]);
+  const { extraExpenses: extraTotal, user1Fixed: user1FixedTotal, user2Fixed: user2FixedTotal } = result;
 
   function update<K extends keyof typeof fields>(key: K, value: number) {
     setFields((f) => ({ ...f, [key]: value }));
   }
 
-  function handleSave() {
-    startTransition(async () => {
-      await saveMonthlyRecord({ id: record.id, ...fields });
-      setSavedAt(Date.now());
+  // Saves only the fields that changed, one at a time, so this tab never
+  // overwrites something the other person edited in the meantime.
+  function saveChanged(keys: RecordField[]) {
+    run(async () => {
+      for (const key of keys) {
+        if (fields[key] === savedFields.current[key]) continue;
+        const saved = await saveMonthlyRecord(record.id, key, fields[key]);
+        if (saved.error) return saved;
+        savedFields.current[key] = fields[key];
+        setSavedAt(Date.now());
+      }
+      return {};
     });
   }
 
   function handleAddExpense() {
     const amount = Number(newExpense.amount) || 0;
-    if (!newExpense.description || amount === 0) return;
-    startTransition(async () => {
-      await addExpense({
-        monthly_record_id: record.id,
-        description: newExpense.description,
-        amount,
-        assignee: newExpense.assignee,
-      });
-      setNewExpense({ description: "", amount: "", assignee: "joint" });
-    });
+    if (!newExpense.description.trim() || amount === 0) return;
+    run(
+      () =>
+        addExpense({
+          monthly_record_id: record.id,
+          description: newExpense.description,
+          amount,
+          assignee: newExpense.assignee,
+        }),
+      () => setNewExpense({ description: "", amount: "", assignee: "joint" }),
+    );
   }
 
-  function handleAddPersonalFixed(assignee: Assignee, description: string, amount: number) {
-    startTransition(async () => {
-      await addExpense({
-        monthly_record_id: record.id,
-        description,
-        amount,
-        assignee,
-        type: "personal_fixed",
-      });
-    });
+  function handleAddPersonalFixed(assignee: Assignee, description: string, amount: number, onDone: () => void) {
+    run(
+      () =>
+        addExpense({
+          monthly_record_id: record.id,
+          description,
+          amount,
+          assignee,
+          type: "personal_fixed",
+        }),
+      onDone,
+    );
   }
 
   function handleDeleteExpense(id: string) {
-    startTransition(async () => {
-      await deleteExpense(id);
-    });
+    run(() => deleteExpense(id));
   }
 
   function handleToggleLock() {
-    startTransition(async () => {
-      await toggleLock(record.id, !locked);
-    });
+    run(() => toggleLock(record.id, !locked));
   }
 
   const isDeficit = result.deficit > 0;
@@ -315,6 +306,12 @@ export default function MonthForm({
         </div>
       </div>
 
+      {error && (
+        <p role="alert" className="rounded-xl bg-shortfall-soft px-4 py-3 text-sm text-shortfall-ink">
+          {error}
+        </p>
+      )}
+
       {/* Income */}
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-muted">Inkomen</h2>
@@ -325,7 +322,7 @@ export default function MonthForm({
             value={fields.user1_income}
             disabled={locked}
             onChange={(v) => update("user1_income", v)}
-            onBlur={handleSave}
+            onBlur={() => saveChanged(["user1_income"])}
           />
           <NumberField
             label="Inkomen Naroa"
@@ -333,7 +330,7 @@ export default function MonthForm({
             value={fields.user2_income}
             disabled={locked}
             onChange={(v) => update("user2_income", v)}
-            onBlur={handleSave}
+            onBlur={() => saveChanged(["user2_income"])}
           />
         </div>
       </section>
@@ -349,9 +346,9 @@ export default function MonthForm({
           <BudgetBar label="Creditcard" amount={fields.credit_card_bill} total={result.totalExpenses} color="#6b6252" />
         </div>
         <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <NumberField label="Gezamenlijke rekening (vast)" value={fields.joint_fixed} disabled={locked} onChange={(v) => update("joint_fixed", v)} onBlur={handleSave} />
-          <NumberField label="Boodschappen" value={fields.joint_groceries} disabled={locked} onChange={(v) => update("joint_groceries", v)} onBlur={handleSave} />
-          <NumberField label="Creditcard" value={fields.credit_card_bill} disabled={locked} onChange={(v) => update("credit_card_bill", v)} onBlur={handleSave} />
+          <NumberField label="Gezamenlijke rekening (vast)" value={fields.joint_fixed} disabled={locked} onChange={(v) => update("joint_fixed", v)} onBlur={() => saveChanged(["joint_fixed"])} />
+          <NumberField label="Boodschappen" value={fields.joint_groceries} disabled={locked} onChange={(v) => update("joint_groceries", v)} onBlur={() => saveChanged(["joint_groceries"])} />
+          <NumberField label="Creditcard" value={fields.credit_card_bill} disabled={locked} onChange={(v) => update("credit_card_bill", v)} onBlur={() => saveChanged(["credit_card_bill"])} />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <PersonalFixedList
@@ -502,20 +499,14 @@ export default function MonthForm({
       {!locked && (
         <div className="flex items-center gap-3">
           <button
-            onClick={handleSave}
+            onClick={() => saveChanged(RECORD_FIELDS)}
             disabled={isPending}
             className="press rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:brightness-95 disabled:opacity-50"
           >
             {isPending ? "Bezig met opslaan…" : "Maand opslaan"}
           </button>
           {savedAt && (
-            <motion.span
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-sm text-surplus-ink"
-            >
-              Opgeslagen
-            </motion.span>
+            <span className="fade-in text-sm text-surplus-ink">Opgeslagen</span>
           )}
         </div>
       )}

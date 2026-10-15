@@ -1,19 +1,15 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { withdrawFromSavingsPot } from "@/app/spaardoelen/actions";
+import { useAction } from "@/components/useAction";
+import { currency } from "@/lib/format";
 import type { SavingsPot } from "@/lib/types";
-
-const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
-function currency(n: number) {
-  return eur.format(n);
-}
 
 function WithdrawModal({ pot, onClose }: { pot: SavingsPot; onClose: () => void }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { run, isPending, error, setError } = useAction();
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -33,14 +29,15 @@ function WithdrawModal({ pot, onClose }: { pot: SavingsPot; onClose: () => void 
       setError(`Dit is hoger dan het huidige saldo (${currency(pot.current_balance)}).`);
       return;
     }
-    startTransition(async () => {
-      await withdrawFromSavingsPot({
-        pot_id: pot.id,
-        amount: value,
-        description: description || "Geld opgenomen",
-      });
-      onClose();
-    });
+    run(
+      () =>
+        withdrawFromSavingsPot({
+          pot_id: pot.id,
+          amount: value,
+          description: description || "Geld opgenomen",
+        }),
+      onClose,
+    );
   }
 
   return (

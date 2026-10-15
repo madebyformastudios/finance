@@ -1,60 +1,25 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { getAllMonthlyRecords, getExpensesForRecords } from "@/lib/data";
-import { calculate } from "@/lib/calc";
+import { getAllMonthlyRecords, getUserEmail } from "@/lib/data";
+import { calculateMonth } from "@/lib/calc";
+import { currency } from "@/lib/format";
+import { currentMonth } from "@/lib/month";
 import { MONTH_NAMES } from "@/lib/types";
 import NavBar from "@/components/NavBar";
 
-const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
-function currency(n: number) {
-  return eur.format(n);
-}
-
 export default async function HistoryPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { month: currentMonthNumber, year: currentYear } = currentMonth();
 
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
-
-  const allRecords = await getAllMonthlyRecords();
-  const records = allRecords.filter(
-    (r) => r.locked_status || r.year < currentYear || (r.year === currentYear && r.month < currentMonth),
-  );
-  const expenses = await getExpensesForRecords(records.map((r) => r.id));
-
-  const rows = records.map((r) => {
-    const recordExpenses = expenses.filter((e) => e.monthly_record_id === r.id);
-    const extraTotal = recordExpenses
-      .filter((e) => e.type === "extra")
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-    const user1FixedTotal = recordExpenses
-      .filter((e) => e.type === "personal_fixed" && e.assignee === "user1")
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-    const user2FixedTotal = recordExpenses
-      .filter((e) => e.type === "personal_fixed" && e.assignee === "user2")
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-
-    const result = calculate({
-      user1Income: Number(r.user1_income),
-      user2Income: Number(r.user2_income),
-      user1Fixed: user1FixedTotal,
-      user2Fixed: user2FixedTotal,
-      jointFixed: Number(r.joint_fixed),
-      jointGroceries: Number(r.joint_groceries),
-      extraExpenses: extraTotal,
-      creditCardBill: Number(r.credit_card_bill),
-    });
-
-    return { record: r, result };
-  });
+  const [email, allRecords] = await Promise.all([getUserEmail(), getAllMonthlyRecords()]);
+  const rows = allRecords
+    .filter(
+      (r) =>
+        r.locked_status || r.year < currentYear || (r.year === currentYear && r.month < currentMonthNumber),
+    )
+    .map((record) => ({ record, result: calculateMonth(record, record.expenses) }));
 
   return (
     <div className="flex min-h-screen flex-col">
-      <NavBar email={user?.email} />
+      <NavBar email={email} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
         <h1 className="mb-5 font-display text-xl font-semibold text-ink">Geschiedenis</h1>
         <div className="overflow-hidden rounded-2xl border border-border bg-card">

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
 
 const LINKS = [
   { href: "/dashboard", label: "Overzicht" },
@@ -61,66 +60,51 @@ export default function NavBar({ email }: { email?: string | null }) {
         </button>
       </div>
 
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-50 flex flex-col bg-canvas sm:hidden"
-          >
-            <div className="flex justify-end px-4 py-3">
-              <button
-                onClick={() => setMenuOpen(false)}
-                aria-label="Menu sluiten"
-                className="press flex h-11 w-11 items-center justify-center text-ink transition-opacity hover:opacity-60"
-              >
-                <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </div>
-
-            <motion.nav
-              initial="closed"
-              animate="open"
-              variants={{ open: { transition: { staggerChildren: 0.04, delayChildren: 0.05 } } }}
-              className="flex flex-1 flex-col gap-1 px-6 py-4"
+      {menuOpen && (
+        <div className="fade-in fixed inset-0 z-50 flex flex-col bg-canvas sm:hidden">
+          <div className="flex justify-end px-4 py-3">
+            <button
+              onClick={() => setMenuOpen(false)}
+              aria-label="Menu sluiten"
+              className="press flex h-11 w-11 items-center justify-center text-ink transition-opacity hover:opacity-60"
             >
-              {LINKS.map((link) => (
-                <motion.div
-                  key={link.href}
-                  variants={{
-                    closed: { opacity: 0, y: 8 },
-                    open: { opacity: 1, y: 0 },
-                  }}
-                >
-                  <Link
-                    href={link.href}
-                    onClick={() => setMenuOpen(false)}
-                    className="press block rounded-xl py-4 font-display text-2xl font-semibold text-ink"
-                  >
-                    {link.label}
-                  </Link>
-                </motion.div>
-              ))}
-            </motion.nav>
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
 
-            <div className="flex flex-col gap-3 px-6 py-6">
-              {email && <span className="text-sm text-muted">{email}</span>}
-              <form action="/auth/signout" method="post">
-                <button
-                  type="submit"
-                  className="press w-full rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted hover:bg-card"
+          <nav className="flex flex-1 flex-col gap-1 px-6 py-4">
+            {LINKS.map((link, i) => (
+              <div
+                key={link.href}
+                className="fade-in"
+                style={{ "--delay": `${50 + i * 40}ms` } as CSSProperties}
+              >
+                <Link
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="press block rounded-xl py-4 font-display text-2xl font-semibold text-ink"
                 >
-                  Uitloggen
-                </button>
-              </form>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  {link.label}
+                </Link>
+              </div>
+            ))}
+          </nav>
+
+          <div className="flex flex-col gap-3 px-6 py-6">
+            {email && <span className="text-sm text-muted">{email}</span>}
+            <form action="/auth/signout" method="post">
+              <button
+                type="submit"
+                className="press w-full rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted hover:bg-card"
+              >
+                Uitloggen
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

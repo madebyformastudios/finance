@@ -1,29 +1,22 @@
-import { createClient } from "@/lib/supabase/server";
-import { getRecentSavingsTransactions, getSavingsPots } from "@/lib/data";
+import { getRecentSavingsTransactions, getSavingsPots, getUserEmail } from "@/lib/data";
+import { currency } from "@/lib/format";
 import NavBar from "@/components/NavBar";
 import SavingsPotCard from "@/components/SavingsPotCard";
 import NewPotForm from "@/components/NewPotForm";
 
-const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
-function currency(n: number) {
-  return eur.format(n);
-}
-
 const dateFormat = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function SpaardoelenPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const pots = await getSavingsPots();
-  const transactions = await getRecentSavingsTransactions(100);
+  const [email, pots, transactions] = await Promise.all([
+    getUserEmail(),
+    getSavingsPots(),
+    getRecentSavingsTransactions(100),
+  ]);
   const potNameById = new Map(pots.map((p) => [p.id, p.name]));
 
   return (
     <div className="flex min-h-screen flex-col">
-      <NavBar email={user?.email} />
+      <NavBar email={email} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
         <h1 className="mb-5 font-display text-xl font-semibold text-ink">Spaardoelen</h1>
 

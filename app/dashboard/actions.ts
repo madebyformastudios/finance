@@ -2,41 +2,49 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { actionError, INVALID_INPUT, isMoney, type ActionResult } from "@/lib/actions";
 
-export interface RecordFieldsInput {
-  id: string;
-  user1_income: number;
-  user2_income: number;
-  joint_fixed: number;
-  joint_groceries: number;
-  credit_card_bill: number;
+const RECORD_FIELDS = ["user1_income", "user2_income", "joint_fixed", "joint_groceries", "credit_card_bill"];
+const ASSIGNEES = ["user1", "user2", "joint"];
+
+export type RecordField =
+  | "user1_income"
+  | "user2_income"
+  | "joint_fixed"
+  | "joint_groceries"
+  | "credit_card_bill";
+
+function refresh() {
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
 }
 
-export async function saveMonthlyRecord(input: RecordFieldsInput) {
-  const supabase = await createClient();
-  const { id, ...fields } = input;
+// Saves one field, never the whole row: a tab that has been open for a while
+// must not overwrite what the other person changed in the meantime.
+export async function saveMonthlyRecord(id: string, field: RecordField, value: number): Promise<ActionResult> {
+  if (!RECORD_FIELDS.includes(field) || !isMoney(value)) return INVALID_INPUT;
 
-  const { error } = await supabase
+  const supabase = await createClient();
+  const { data, error } = await supabase
     .from("monthly_records")
-    .update(fields)
+    .update({ [field]: value })
     .eq("id", id)
-    .eq("locked_status", false);
+    .eq("locked_status", false)
+    .select("id");
 
-  if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
+  if (error) return actionError(error);
+  if (data.length === 0) return { error: "Deze maand is vergrendeld." };
+  refresh();
+  return {};
 }
 
-export async function toggleLock(id: string, locked: boolean) {
+export async function toggleLock(id: string, locked: boolean): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("monthly_records")
-    .update({ locked_status: locked })
-    .eq("id", id);
+  const { error } = await supabase.from("monthly_records").update({ locked_status: locked }).eq("id", id);
 
-  if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
+  if (error) return actionError(error);
+  refresh();
+  return {};
 }
 
 export async function addExpense(input: {
@@ -45,23 +53,38 @@ export async function addExpense(input: {
   amount: number;
   assignee: "user1" | "user2" | "joint";
   type?: "extra" | "personal_fixed";
-}) {
+}): Promise<ActionResult> {
+  const description = String(input.description ?? "").trim();
+  const type = input.type ?? "extra";
+  if (
+    !description ||
+    !isMoney(input.amount) ||
+    input.amount === 0 ||
+    !ASSIGNEES.includes(input.assignee) ||
+    !["extra", "personal_fixed"].includes(type)
+  ) {
+    return INVALID_INPUT;
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("expenses").insert({
     monthly_record_id: input.monthly_record_id,
-    type: input.type ?? "extra",
-    description: input.description,
+    type,
+    description,
     amount: input.amount,
     assignee: input.assignee,
   });
 
-  if (error) throw new Error(error.message);
-  if (input.type === "personal_fixed") await markPersonalFixedManaged(input.monthly_record_id);
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
+  if (error) return actionError(error);
+  if (type === "personal_fixed") {
+    const result = await markPersonalFixedManaged(input.monthly_record_id);
+    if (result.error) return result;
+  }
+  refresh();
+  return {};
 }
 
-export async function deleteExpense(id: string) {
+export async function deleteExpense(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: deleted, error } = await supabase
     .from("expenses")
@@ -69,29 +92,44 @@ export async function deleteExpense(id: string) {
     .eq("id", id)
     .select("monthly_record_id, type")
     .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (deleted?.type === "personal_fixed") await markPersonalFixedManaged(deleted.monthly_record_id);
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
+
+  if (error) return actionError(error);
+  // No row back: it is already gone, or the month is locked (RLS hides it).
+  if (!deleted) return { error: "Kon dit item niet verwijderen. Is de maand vergrendeld?" };
+  if (deleted.type === "personal_fixed") {
+    const result = await markPersonalFixedManaged(deleted.monthly_record_id);
+    if (result.error) return result;
+  }
+  refresh();
+  return {};
 }
 
 // Once someone edits a month's fixed costs by hand, carry-forward must never
 // run for that month again (it would resurrect a deliberate deletion).
-async function markPersonalFixedManaged(monthlyRecordId: string) {
+async function markPersonalFixedManaged(monthlyRecordId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase
     .from("monthly_records")
     .update({ personal_fixed_cloned: true })
     .eq("id", monthlyRecordId);
-  if (error) throw new Error(error.message);
+  return error ? actionError(error) : {};
 }
 
-export async function createSavingsPot(input: { name: string; target_amount: number | null }) {
+export async function createSavingsPot(input: {
+  name: string;
+  target_amount: number | null;
+}): Promise<ActionResult> {
+  const name = String(input.name ?? "").trim();
+  const target = input.target_amount;
+  if (!name || (target !== null && (!isMoney(target) || target <= 0))) return INVALID_INPUT;
+
   const supabase = await createClient();
-  const { error } = await supabase.from("savings_pots").insert(input);
-  if (error) throw new Error(error.message);
+  const { error } = await supabase.from("savings_pots").insert({ name, target_amount: target });
+
+  if (error) return actionError(error);
   revalidatePath("/dashboard");
   revalidatePath("/spaardoelen");
+  return {};
 }
 
 export async function allocateToSavingsPot(input: {
@@ -99,10 +137,19 @@ export async function allocateToSavingsPot(input: {
   monthly_record_id: string;
   amount: number;
   description: string;
-}) {
+}): Promise<ActionResult> {
+  if (!isMoney(input.amount) || input.amount <= 0) return INVALID_INPUT;
+
   const supabase = await createClient();
-  const { error } = await supabase.from("savings_transactions").insert(input);
-  if (error) throw new Error(error.message);
+  const { error } = await supabase.from("savings_transactions").insert({
+    pot_id: input.pot_id,
+    monthly_record_id: input.monthly_record_id,
+    amount: input.amount,
+    description: String(input.description ?? ""),
+  });
+
+  if (error) return actionError(error);
   revalidatePath("/dashboard");
   revalidatePath("/spaardoelen");
+  return {};
 }

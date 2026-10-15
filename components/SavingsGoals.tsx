@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { allocateToSavingsPot, createSavingsPot } from "@/app/dashboard/actions";
+import { allocateToSavingsPot } from "@/app/dashboard/actions";
+import NewPotForm from "@/components/NewPotForm";
+import { useAction } from "@/components/useAction";
+import { currency } from "@/lib/format";
 import type { SavingsPot, SavingsTransaction } from "@/lib/types";
-
-const eur = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
-function currency(n: number) {
-  return eur.format(n);
-}
 
 function PotRow({
   pot,
@@ -23,7 +21,7 @@ function PotRow({
   unallocated: number;
   locked: boolean;
   isPending: boolean;
-  onAllocate: (potId: string, amount: number) => void;
+  onAllocate: (potId: string, amount: number, onDone: () => void) => void;
 }) {
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +29,12 @@ function PotRow({
   function handleAllocate() {
     const value = Number(amount) || 0;
     if (value <= 0) return;
-    if (value > unallocated) {
+    if (Math.round(value * 100) > Math.round(unallocated * 100)) {
       setError(`Dit is hoger dan het nog te verdelen bedrag (${currency(unallocated)}).`);
       return;
     }
     setError(null);
-    onAllocate(pot.id, value);
-    setAmount("");
+    onAllocate(pot.id, value, () => setAmount(""));
   }
 
   return (
@@ -95,8 +92,7 @@ export default function SavingsGoals({
   monthTransactions: SavingsTransaction[];
   locked: boolean;
 }) {
-  const [isPending, startTransition] = useTransition();
-  const [newPot, setNewPot] = useState({ name: "", target_amount: "" });
+  const { run, isPending, error } = useAction();
 
   const allocatedByPot = useMemo(() => {
     const map = new Map<string, number>();
@@ -110,31 +106,24 @@ export default function SavingsGoals({
     () => monthTransactions.reduce((sum, t) => sum + Number(t.amount), 0),
     [monthTransactions],
   );
-  const unallocated = savingsPot - allocatedThisMonth;
+  const unallocated = Math.round((savingsPot - allocatedThisMonth) * 100) / 100;
 
   const unallocatedColor =
     unallocated > 0 ? "text-surplus-ink" : unallocated === 0 ? "text-muted" : "text-shortfall";
   const unallocatedBg =
     unallocated > 0 ? "bg-surplus-soft" : unallocated === 0 ? "bg-canvas" : "bg-shortfall-soft";
 
-  function handleAllocate(potId: string, amount: number) {
-    startTransition(async () => {
-      await allocateToSavingsPot({
-        pot_id: potId,
-        monthly_record_id: monthlyRecordId,
-        amount,
-        description: `Maandelijkse inleg ${monthLabel}`,
-      });
-    });
-  }
-
-  function handleCreatePot() {
-    if (!newPot.name) return;
-    const target = Number(newPot.target_amount) || 0;
-    startTransition(async () => {
-      await createSavingsPot({ name: newPot.name, target_amount: target > 0 ? target : null });
-      setNewPot({ name: "", target_amount: "" });
-    });
+  function handleAllocate(potId: string, amount: number, onDone: () => void) {
+    run(
+      () =>
+        allocateToSavingsPot({
+          pot_id: potId,
+          monthly_record_id: monthlyRecordId,
+          amount,
+          description: `Maandelijkse inleg ${monthLabel}`,
+        }),
+      onDone,
+    );
   }
 
   return (
@@ -168,36 +157,13 @@ export default function SavingsGoals({
         {pots.length === 0 && <li className="text-sm text-muted">Nog geen spaarpotjes aangemaakt.</li>}
       </ul>
 
-      {!locked && (
-        <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="text-muted">Naam nieuw spaarpotje</span>
-            <input
-              value={newPot.name}
-              placeholder="bijv. Onderhoud Motor"
-              onChange={(e) => setNewPot((n) => ({ ...n, name: e.target.value }))}
-              className="rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted">Doelbedrag (optioneel)</span>
-            <input
-              type="number"
-              step="0.01"
-              value={newPot.target_amount}
-              onChange={(e) => setNewPot((n) => ({ ...n, target_amount: e.target.value }))}
-              className="w-full rounded-xl border border-border bg-card px-3 py-2 outline-none focus:border-dominant sm:w-32"
-            />
-          </label>
-          <button
-            onClick={handleCreatePot}
-            disabled={isPending || !newPot.name}
-            className="press rounded-xl bg-dominant px-4 py-2 text-sm font-medium text-dominant-ink hover:bg-dominant-soft disabled:opacity-50"
-          >
-            + Nieuw spaarpotje
-          </button>
-        </div>
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-shortfall">
+          {error}
+        </p>
       )}
+
+      {!locked && <NewPotForm variant="inline" />}
     </section>
   );
 }
