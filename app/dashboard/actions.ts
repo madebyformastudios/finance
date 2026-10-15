@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { actionError, INVALID_INPUT, isMoney, type ActionResult } from "@/lib/actions";
+import { calculateMonth } from "@/lib/calc";
 
 const RECORD_FIELDS = ["user1_income", "user2_income", "joint_fixed", "joint_groceries", "credit_card_bill"];
 const ASSIGNEES = ["user1", "user2", "joint"];
@@ -141,6 +142,25 @@ export async function allocateToSavingsPot(input: {
   if (!isMoney(input.amount) || input.amount <= 0) return INVALID_INPUT;
 
   const supabase = await createClient();
+
+  // The browser also checks this, but a stale tab can't know what the other
+  // person already allocated, so the limit is re-derived from saved data.
+  const monthId = input.monthly_record_id;
+  const [record, expenses, allocated] = await Promise.all([
+    supabase.from("monthly_records").select("*").eq("id", monthId).maybeSingle(),
+    supabase.from("expenses").select("type, assignee, amount").eq("monthly_record_id", monthId),
+    supabase.from("savings_transactions").select("amount").eq("monthly_record_id", monthId),
+  ]);
+  const failed = record.error ?? expenses.error ?? allocated.error;
+  if (failed) return actionError(failed);
+  if (!record.data) return INVALID_INPUT;
+
+  const toCents = (n: number) => Math.round(n * 100);
+  const left =
+    toCents(calculateMonth(record.data, expenses.data ?? []).savings) -
+    (allocated.data ?? []).reduce((sum, t) => sum + toCents(Number(t.amount)), 0);
+  if (toCents(input.amount) > left) return { error: "Dit is hoger dan het nog te verdelen bedrag." };
+
   const { error } = await supabase.from("savings_transactions").insert({
     pot_id: input.pot_id,
     monthly_record_id: input.monthly_record_id,

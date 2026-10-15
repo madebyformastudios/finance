@@ -18,14 +18,6 @@ import NumberField from "@/components/NumberField";
 import SavingsGoals from "@/components/SavingsGoals";
 import { useAction } from "@/components/useAction";
 
-const RECORD_FIELDS: RecordField[] = [
-  "user1_income",
-  "user2_income",
-  "joint_fixed",
-  "joint_groceries",
-  "credit_card_bill",
-];
-
 const ASSIGNEE_LABEL: Record<string, string> = {
   user1: "Jairo",
   user2: "Naroa",
@@ -499,7 +491,7 @@ export default function MonthForm({
       {!locked && (
         <div className="flex items-center gap-3">
           <button
-            onClick={() => saveChanged(RECORD_FIELDS)}
+            onClick={() => saveChanged(Object.keys(fields) as RecordField[])}
             disabled={isPending}
             className="press rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:brightness-95 disabled:opacity-50"
           >

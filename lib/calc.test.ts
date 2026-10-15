@@ -54,6 +54,12 @@ test("float noise does not leak into totals", () => {
   assert.equal(r.totalExpenses, 0.3);
 });
 
+test("a missing or invalid amount counts as 0, not NaN", () => {
+  const r = calculate({ ...base, user1Income: NaN, user2Income: 100, jointFixed: Number("abc") });
+  assert.equal(r.totalExpenses, 0);
+  assert.equal(r.user2Remaining, 100);
+});
+
 test("calculateMonth sums expenses by type and assignee (amounts may arrive as strings)", () => {
   const r = calculateMonth(
     { user1_income: 3000, user2_income: 2000, joint_fixed: 1000, joint_groceries: 200, credit_card_bill: 100 },

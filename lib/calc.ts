@@ -33,7 +33,8 @@ export interface CalcResult {
   deficit: number; // > 0 when User 2's income can't cover the shortfall
 }
 
-const cents = (n: number) => Math.round(n * 100);
+// Anything that is not a finite number counts as 0 instead of turning every total into NaN.
+const cents = (n: number) => (Number.isFinite(n) ? Math.round(n * 100) : 0);
 
 export function calculate(input: CalcInput): CalcResult {
   // Step 1: Total Liability
